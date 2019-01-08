@@ -7,6 +7,7 @@ https://xiph.org/vorbis/doc/oggstream.html
 https://xiph.org/vorbis/doc/framing.html
 https://xiph.org/vorbis/doc/v-comment.html
 https://github.com/xiph/vorbis/blob/master/lib/vorbisfile.c
+https://github.com/runningwild/gorbis/blob/master/ogg.go
 
 * The first Vorbis packet (the identification header), which uniquely identifies a stream as Vorbis audio, is placed alone in the first page of the logical Ogg stream. This results in a first Ogg page of exactly 58 bytes at the very beginning of the logical stream.
 * This first page is marked ’beginning of stream’ in the page flags.
