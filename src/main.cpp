@@ -10,6 +10,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <memory>
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -43,14 +44,14 @@ struct Page {
 	uint8_t data[256 * 256];
 	
 	enum ReadHeaderResult { Ok, Eof, Error };
-	ReadHeaderResult read_header(FILE* fp) {
-		size_t c = fread(&header, sizeof(PageHeader), 1, fp);
+	ReadHeaderResult read_header(IReader* reader) {
+		size_t c = reader->read(&header, sizeof(PageHeader), 1);
 		if(c == 1) return ReadHeaderResult::Ok;
-		if(feof(fp)) return ReadHeaderResult::Eof;
+		if(reader->reachedEnd()) return ReadHeaderResult::Eof;
 		return ReadHeaderResult::Error;
 	}
 	
-	OkOrError read(FILE* fp) {
+	OkOrError read(IReader* reader) {
 		CHECK(memcmp(header.capture_pattern, "OggS", 4) == 0);
 		CHECK(header.stream_structure_version == 0);
 		endian_swap_to_little_endian(header.absolute_granule_pos);
@@ -58,13 +59,13 @@ struct Page {
 		endian_swap_to_little_endian(header.page_sequence_num);
 		endian_swap_to_little_endian(header.page_crc_checksum);
 		
-		CHECK(fread(segment_table, header.page_segments_num, 1, fp) == 1);
+		CHECK(reader->read(segment_table, header.page_segments_num, 1) == 1);
 		data_len = 0;
 		for(uint8_t i = 0; i < header.page_segments_num; ++i)
 			data_len += segment_table[i];
 		if(header.page_segments_num > 0)
 			CHECK(segment_table[header.page_segments_num - 1] != 255); // packets spanning pages not supported currently...
-		CHECK(fread(data, data_len, 1, fp) == 1);
+		CHECK(reader->read(data, data_len, 1) == 1);
 		
 		uint32_t expected_crc = header.page_crc_checksum;
 		header.page_crc_checksum = 0; // required by API
@@ -156,7 +157,7 @@ struct Reader {
 	Page buffer_page_;
 	std::map<uint32_t, StreamInfo> streams_;
 	size_t packet_counts_;
-	FILE* fp_;
+	std::shared_ptr<IReader> reader_;
 
 	Reader() : packet_counts_(0) {}
 	
@@ -164,7 +165,7 @@ struct Reader {
 		CHECK_ERR(_open_file(filename));
 		size_t page_count = 0;
 		while(true) {
-			Page::ReadHeaderResult res = buffer_page_.read_header(fp_);
+			Page::ReadHeaderResult res = buffer_page_.read_header(reader_.get());
 			if(res == Page::ReadHeaderResult::Ok)
 				CHECK_ERR(_read_page());
 			else if(res == Page::ReadHeaderResult::Eof)
@@ -179,13 +180,13 @@ struct Reader {
 	}
 	
 	OkOrError _open_file(const char* fn) {
-		fp_ = fopen(fn, "r");
-		CHECK(fp_ != nullptr);
+		reader_ = std::make_shared<FileReader>(fn);
+		CHECK_ERR(reader_->isValid());
 		return OkOrError();
 	}
 	
 	OkOrError _read_page() {
-		CHECK_ERR(buffer_page_.read(fp_));
+		CHECK_ERR(buffer_page_.read(reader_.get()));
 		if(buffer_page_.header.header_type_flag & HeaderFlag_First) {
 			CHECK(streams_.find(buffer_page_.header.stream_serial_num) == streams_.end());
 			streams_[buffer_page_.header.stream_serial_num] = StreamInfo();

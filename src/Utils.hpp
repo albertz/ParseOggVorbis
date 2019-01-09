@@ -9,6 +9,7 @@
 #ifndef Utils_h
 #define Utils_h
 
+#include <stdio.h>
 #include <stdint.h>
 #include <string>
 #ifdef __APPLE__
@@ -70,5 +71,24 @@ inline void endian_swap_to_little_endian(T& x) {
 	endian_swap(x);
 #endif
 }
+
+
+struct IReader {
+	virtual ~IReader() {}
+	virtual OkOrError isValid() = 0;
+	virtual bool reachedEnd() = 0;
+	virtual size_t read(void* ptr, size_t size, size_t nitems) = 0;
+};
+
+struct FileReader : IReader {
+	FILE* fp_;
+	FileReader(const char* filename) { fp_ = fopen(filename, "r"); }
+	virtual ~FileReader() { if(fp_) fclose(fp_); }
+	virtual OkOrError isValid() override { CHECK(fp_ != NULL); return OkOrError(); }
+	virtual bool reachedEnd() override { return feof(fp_); }
+	virtual size_t read(void* ptr, size_t size, size_t nitems) override {
+		return fread(ptr, size, nitems, fp_);
+	}
+};
 
 #endif /* Utils_h */
