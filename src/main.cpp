@@ -98,7 +98,18 @@ static int ilog(unsigned int v) {
 	return ret;
 };
 
-struct Packet {
+
+struct StreamInfo {
+	uint32_t packet_counts_;
+	// getCodec(page)
+	// packet buffer...
+	
+	StreamInfo() : packet_counts_(0) {}
+};
+
+
+struct VorbisPacket {
+	StreamInfo* stream;
 	uint8_t* data;
 	uint32_t data_len; // never more than 256*256
 	
@@ -144,22 +155,15 @@ struct Packet {
 	}
 };
 
-struct StreamInfo {
-	uint32_t packet_counts_;
-	// getCodec(page)
-	// packet buffer...
-	
-	StreamInfo() : packet_counts_(0) {}
-};
 
-struct Reader {
+struct OggReader {
 	char buffer_[255];
 	Page buffer_page_;
 	std::map<uint32_t, StreamInfo> streams_;
 	size_t packet_counts_;
 	std::shared_ptr<IReader> reader_;
 
-	Reader() : packet_counts_(0) {}
+	OggReader() : packet_counts_(0) {}
 	
 	OkOrError full_read(const char* filename) {
 		CHECK_ERR(_open_file(filename));
@@ -202,7 +206,8 @@ struct Reader {
 			len += buffer_page_.segment_table[segment_i];
 			if(buffer_page_.segment_table[segment_i] < 255) {
 				// new packet
-				Packet packet;
+				VorbisPacket packet;
+				packet.stream = &stream;
 				packet.data = buffer_page_.data + offset;
 				packet.data_len = len;
 				if(stream.packet_counts_ == 0)
@@ -231,7 +236,7 @@ struct Reader {
 
 
 int main(int argc, const char* argv[]) {
-	Reader reader;
+	OggReader reader;
 	OkOrError result = reader.full_read(argv[1]);
 	if(result.is_error_)
 		std::cerr << "error: " << result.err_msg_ << std::endl;
