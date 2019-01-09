@@ -13,82 +13,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
-#ifdef __APPLE__
-#include <machine/endian.h>
-#endif
-#ifndef BYTE_ORDER
-#error BYTE_ORDER not defined
-#endif
+#include "Utils.hpp"
 
-
-struct OkOrError {
-	bool is_error_;
-	std::string err_msg_;
-	explicit OkOrError(const std::string& err_msg) : is_error_(true), err_msg_(err_msg) {}
-	explicit OkOrError() : is_error_(false) {}
-};
-
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-#define CHECK(v) do { if(!(v)) return OkOrError(__FILE__ ":" TOSTRING(__LINE__) ": " #v); } while(0)
-#define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
-
-
-inline void endian_swap(uint16_t& x) {
-	x = ((x>>8) & 0x00FF) | ((x<<8) & 0xFF00);
-}
-
-inline void endian_swap(uint32_t& x) {
-	x = ((x<<24) & 0xFF000000) |
-		((x<<8)  & 0x00FF0000) |
-		((x>>8)  & 0x0000FF00) |
-		((x>>24) & 0x000000FF);
-}
-
-inline void endian_swap(uint64_t& x) {
-	x = ((x<<56) & 0xFF00000000000000) |
-		((x<<40) & 0x00FF000000000000) |
-		((x<<24) & 0x0000FF0000000000) |
-		((x<<8)  & 0x000000FF00000000) |
-		((x>>8)  & 0x00000000FF000000) |
-		((x>>24) & 0x0000000000FF0000) |
-		((x>>40) & 0x000000000000FF00) |
-		((x>>56) & 0x00000000000000FF);
-}
-
-template<typename T>
-inline void endian_swap_to_big_endian(T& x) {
-#if BYTE_ORDER == LITTLE_ENDIAN
-	endian_swap(x);
-#endif
-}
-
-template<typename T>
-inline void endian_swap_to_little_endian(T& x) {
-#if BYTE_ORDER == BIG_ENDIAN
-	endian_swap(x);
-#endif
-}
-
-#include "crctable.h"
-
-static uint32_t update_crc(uint32_t crc, uint8_t* buffer, int size){
-	while(size >= 8) {
-		crc ^= buffer[0]<<24 | buffer[1]<<16 | buffer[2]<<8 | buffer[3];
-		
-		crc = crc_lookup[7][ crc>>24      ] ^ crc_lookup[6][(crc>>16)&0xff] ^
-			  crc_lookup[5][(crc>> 8)&0xff] ^ crc_lookup[4][ crc     &0xff] ^
-			  crc_lookup[3][buffer[4]     ] ^ crc_lookup[2][buffer[5]     ] ^
-			  crc_lookup[1][buffer[6]     ] ^ crc_lookup[0][buffer[7]     ];
-		
-		buffer += 8;
-		size -= 8;
-	}
-	
-	while(size--)
-		crc = (crc<<8) ^ crc_lookup[0][((crc>>24)&0xff) ^ *buffer++];
-	return crc;
-}
 
 // Page + page header is described here:
 // https://xiph.org/vorbis/doc/framing.html
