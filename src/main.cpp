@@ -17,6 +17,8 @@
 #include "Utils.hpp"
 
 
+// Documentation: https://xiph.org/vorbis/doc/
+
 // Page + page header is described here:
 // https://xiph.org/vorbis/doc/framing.html
 
@@ -103,11 +105,18 @@ static int ilog(unsigned int v) {
 struct StreamSetup {
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 	uint16_t vorbis_codebook_count;
-
+	uint8_t vorbis_time_count;
+	uint8_t vorbis_floor_count;
+	
 	OkOrError parse_setup(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
-		// TODO: get the important things...
-		vorbis_codebook_count = reader.readBits<uint16_t>(16);
+		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs LoadBooks
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/setup_header.go
+		vorbis_codebook_count = uint16_t(reader.readBitsT<8>()) + 1;
+		// TODO decode codebooks
+		vorbis_time_count = reader.readBitsT<6>() + 1;
+		
+		// TODO...
 		return OkOrError();
 	}
 };
@@ -163,6 +172,8 @@ struct VorbisPacket {
 		CHECK(type == 5);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		ConstDataReader reader(data + 7, data_len - 7);
+		stream->setup.parse_setup(reader);
+		CHECK(reader.reachedEnd());  // correct?
 		return OkOrError();
 	}
 	
