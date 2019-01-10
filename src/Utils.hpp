@@ -94,10 +94,10 @@ struct FileReader : IReader {
 };
 
 struct ConstDataReader : IReader {
-	const char* data_;
+	const uint8_t* data_;
 	size_t len_;
 	bool reached_end_;
-	ConstDataReader(const char* data, size_t len) : data_(data), len_(len), reached_end_(false) {}
+	ConstDataReader(const uint8_t* data, size_t len) : data_(data), len_(len), reached_end_(false) {}
 	virtual OkOrError isValid() override { return OkOrError(); }
 	virtual bool reachedEnd() override { return reached_end_; }
 	virtual size_t read(void* ptr, size_t size, size_t nitems) override {
@@ -111,6 +111,42 @@ struct ConstDataReader : IReader {
 		return nitems;
 	}
 };
+
+template<int N>
+struct IntTypeByNumBytes {
+	// Fallback to next biggest type, if not defined.
+	static constexpr int NumBytes = IntTypeByNumBytes<N + 1>::NumBytes;
+	typedef typename IntTypeByNumBytes<N + 1>::unsigned_t unsigned_t;
+	typedef typename IntTypeByNumBytes<N + 1>::signed_t signed_t;
+};
+template<> struct IntTypeByNumBytes<1> {
+	static constexpr int NumBytes = 1;
+	typedef uint8_t unsigned_t;
+	typedef int8_t signed_t;
+};
+template<> struct IntTypeByNumBytes<2> {
+	static constexpr int NumBytes = 2;
+	typedef uint16_t unsigned_t;
+	typedef int16_t signed_t;
+};
+template<> struct IntTypeByNumBytes<4> {
+	static constexpr int NumBytes = 4;
+	typedef uint32_t unsigned_t;
+	typedef int32_t signed_t;
+};
+template<> struct IntTypeByNumBytes<8> {
+	static constexpr int NumBytes = 8;
+	typedef uint64_t unsigned_t;
+	typedef int64_t signed_t;
+};
+template<int N>
+struct IntTypeByNumBits {
+	static constexpr int _NumBytes = (N + 7) / 8;
+	static constexpr int NumBytes = IntTypeByNumBytes<_NumBytes>::NumBytes;
+	typedef typename IntTypeByNumBytes<_NumBytes>::unsigned_t unsigned_t;
+	typedef typename IntTypeByNumBytes<_NumBytes>::signed_t signed_t;
+};
+
 
 struct BitReader {
 	// If a byte represents the number 1, the Vorbis documentation (https://xiph.org/vorbis/doc/Vorbis_I_spec.html)
@@ -193,6 +229,17 @@ struct BitReader {
 		return readBits<T>(num * 8);
 	}
 	
+	template<int N>
+	typename IntTypeByNumBits<N>::unsigned_t readBitsT() {
+		typedef typename IntTypeByNumBits<N>::unsigned_t T;
+		return readBits<T>(N);
+	}
+
+	template<int N>
+	typename IntTypeByNumBytes<N>::unsigned_t readBytesT() {
+		return readBitsT<N * 8>();
+	}
+
 	bool reachedEnd() const { return reached_end_; }
 };
 

@@ -79,6 +79,7 @@ struct Page {
 };
 
 struct __attribute__((packed)) IdHeader {
+	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.2. Identification header
 	uint32_t vorbis_version;
 	uint8_t audio_channels;
 	uint32_t audio_sample_rate;
@@ -99,11 +100,25 @@ static int ilog(unsigned int v) {
 };
 
 
+struct StreamSetup {
+	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
+	uint16_t vorbis_codebook_count;
+
+	OkOrError parse_setup(BitReader& reader) {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
+		// TODO: get the important things...
+		vorbis_codebook_count = reader.readBits<uint16_t>(16);
+		return OkOrError();
+	}
+};
+
 struct StreamInfo {
 	uint32_t packet_counts_;
 	// getCodec(page)
 	// packet buffer...
 	
+	StreamSetup setup;
+
 	StreamInfo() : packet_counts_(0) {}
 };
 
@@ -114,6 +129,7 @@ struct VorbisPacket {
 	uint32_t data_len; // never more than 256*256
 	
 	OkOrError parse_id() {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.2
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
 		CHECK(type == 1);
@@ -130,6 +146,8 @@ struct VorbisPacket {
 	
 	OkOrError parse_comment() {
 		// https://xiph.org/vorbis/doc/v-comment.html
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.3
+		// Meta tags, etc.
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
 		CHECK(type == 3);
@@ -139,18 +157,18 @@ struct VorbisPacket {
 	}
 
 	OkOrError parse_setup() {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
 		CHECK(type == 5);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
-		// TODO: get the important things...
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		ConstDataReader reader(data + 7, data_len - 7);
 		return OkOrError();
 	}
 	
 	OkOrError parse_audio() {
-		// TODO ...
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		// TODO ...
 		return OkOrError();
 	}
 };

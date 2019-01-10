@@ -13,7 +13,7 @@ using namespace std;
 
 template<typename T>
 OkOrError checkReadBits(const char* data, size_t len, uint8_t numBits, T value) {
-	ConstDataReader reader(data, len);
+	ConstDataReader reader((const uint8_t*) data, len);
 	BitReader bitReader(&reader);
 	T out = bitReader.readBits<T>(numBits);
 	CHECK(!bitReader.reachedEnd());
@@ -25,7 +25,7 @@ OkOrError checkReadBits(const char* data, size_t len, uint8_t numBits, T value) 
 
 template<typename T1, typename T2>
 OkOrError checkReadBits2(const char* data, size_t len, uint8_t n1, T1 v1, uint8_t n2, T2 v2) {
-	ConstDataReader reader(data, len);
+	ConstDataReader reader((const uint8_t*) data, len);
 	BitReader bitReader(&reader);
 	T1 out1 = bitReader.readBits<T1>(n1);
 	CHECK(!bitReader.reachedEnd());
