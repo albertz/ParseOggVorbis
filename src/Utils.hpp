@@ -113,26 +113,60 @@ struct ConstDataReader : IReader {
 };
 
 struct BitReader {
+	// If a byte represents the number 1, the Vorbis documentation (https://xiph.org/vorbis/doc/Vorbis_I_spec.html)
+	// says that the single set bit is the 'least significant' bit (LSb).
+	// The 'most significant' bit (MSb) is thus represented by the byte 128.
+	// LSbit of a binary integer comes first = bit position 0.
+	// (3-2-1-0) 'big endian' = 'most significant byte first'.
+	// (0-1-2-3) 'little endian' or 'least significant byte first'.
+	// Little endian is what we support.
 	IReader* reader_;
-	uint8_t last_byte_remaining_bits_;
+	int last_byte_remaining_bits_; // 0..7
 	uint8_t last_byte_;
 	BitReader(IReader* reader) : reader_(reader), last_byte_remaining_bits_(0), last_byte_(0) {}
 	template<typename T>
-	OkOrError readBits(T& out, uint8_t num) {
+	OkOrError readBits(T& out, int num) {
 		assert(num > 0 && num <= sizeof(T) * 8);
-		uint8_t i = 0;
+		int i = 0;
 		while(num > 0) {
-			while(num >= 8) {
-				// readBytes??
-				break;
-			}
-			if(num == 0)
-				break;
 			if(last_byte_remaining_bits_ == 0) {
+				while(num >= 64) {
+					uint64_t w;
+					CHECK(reader_->read(&w, 8, 1) == 1);
+					endian_swap_to_little_endian(w);
+					out += T(w) << i;
+					num -= 64;
+					i += 64;
+				}
+				while(num >= 32) {
+					uint32_t w;
+					CHECK(reader_->read(&w, 4, 1) == 1);
+					endian_swap_to_little_endian(w);
+					out += T(w) << i;
+					num -= 32;
+					i += 32;
+				}
+				while(num >= 16) {
+					uint16_t w;
+					CHECK(reader_->read(&w, 2, 1) == 1);
+					endian_swap_to_little_endian(w);
+					out += T(w) << i;
+					num -= 16;
+					i += 16;
+				}
+				while(num >= 8) {
+					uint8_t b;
+					CHECK(reader_->read(&b, 1, 1) == 1);
+					out += T(b) << i;
+					num -= 8;
+					i += 8;
+				}
+				if(num == 0)
+					break;
 				CHECK(reader_->read(&last_byte_, 1, 1) == 1);
 				last_byte_remaining_bits_ = 8;
 			}
-			out = out + (T(last_byte_ & 1) << i);
+			out += T(last_byte_ & 1) << i;
 			last_byte_ >>= 1;
 			--last_byte_remaining_bits_;
 			--num;
@@ -140,28 +174,11 @@ struct BitReader {
 		}
 		return OkOrError();
 	}
-	template<typename T, bool BigEndian=true>
-	OkOrError readBytes(T& out, uint8_t num) {
+	template<typename T, bool BigEndian=false>
+	OkOrError readBytes(T& out, int num) {
 		assert(num > 0 && num <= sizeof(T));
-		static_assert(BigEndian, "not implemented otherwise...");
-		num *= 8;
-		while(num > 0) {
-			if(last_byte_remaining_bits_ > 0) { // Some bits left in last_byte_?
-				
-			}
-			if(num % 8 != 0) {
-				
-			}
-			if(last_byte_remaining_bits_ == 0)
-				CHECK(reader_->read(&last_byte_, 1, 1) == 1);
-			out += T(last_byte_ & 1) << (num - 1);
-			last_byte_ >>= 1;
-			++last_byte_remaining_bits_;
-			if(last_byte_remaining_bits_ == 8)
-				last_byte_remaining_bits_ = 0;
-			--num;
-		}
-
+		static_assert(!BigEndian, "not implemented otherwise...");
+		return readBits(out, num * 8);
 	}
 };
 

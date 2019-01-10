@@ -18,7 +18,7 @@ OkOrError checkReadBits(const char* data, size_t len, uint8_t numBits, T value) 
 	T out = 0;
 	CHECK_ERR(bitReader.readBits(out, numBits));
 	if(out != value)
-		std::cerr << "out: " << long(out) << ", value: " << long(value) << endl;
+		std::cerr << std::hex << "out: 0x" << long(out) << ", value: 0x" << long(value) << std::dec << endl;
 	CHECK(out == value);
 	return OkOrError();
 }
@@ -30,12 +30,12 @@ OkOrError checkReadBits2(const char* data, size_t len, uint8_t n1, T1 v1, uint8_
 	T1 out1 = 0;
 	CHECK_ERR(bitReader.readBits(out1, n1));
 	if(out1 != v1)
-		std::cerr << "out1: " << long(out1) << ", v1: " << long(v1) << endl;
+		std::cerr << std::hex << "out1: " << "0x" << long(out1) << ", v1: 0x" << long(v1) << std::dec << endl;
 	CHECK(out1 == v1);
 	T2 out2 = 0;
 	CHECK_ERR(bitReader.readBits(out2, n2));
 	if(out2 != v2)
-		std::cerr << "out1: " << long(out1) << ", v1: " << long(v1) << endl;
+		std::cerr << std::hex << "out2: " << "0x" << long(out2) << ", v2: 0x" << long(v2) << std::dec << endl;
 	CHECK(out2 == v2);
 	return OkOrError();
 }
@@ -51,7 +51,10 @@ void test_all() {
 	ASSERT_ERR(checkReadBits("\x02\x00\x00\x00", 4, 9, 2));
 	ASSERT_ERR(checkReadBits("\xff\x00\x00\x00", 4, 8, 255));
 	ASSERT_ERR(checkReadBits("\xff\xff\x00\x00", 4, 16, 0xffff));
+	ASSERT_ERR(checkReadBits("\x01\x02\x00\x00", 4, 16, 0x0201));
+	ASSERT_ERR(checkReadBits("\x01\x02\x03\x04", 4, 32, 0x04030201));
 	ASSERT_ERR(checkReadBits2("\x01\x02\x00\x00", 4, 8, 1, 8, 2));
+	ASSERT_ERR(checkReadBits2("\x01\x01\x00\x00", 4, 7, 1, 8, 2));
 }
 
 int main() {
