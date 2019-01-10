@@ -15,8 +15,8 @@ template<typename T>
 OkOrError checkReadBits(const char* data, size_t len, uint8_t numBits, T value) {
 	ConstDataReader reader(data, len);
 	BitReader bitReader(&reader);
-	T out = 0;
-	CHECK_ERR(bitReader.readBits(out, numBits));
+	T out = bitReader.readBits<T>(numBits);
+	CHECK(!bitReader.reachedEnd());
 	if(out != value)
 		std::cerr << std::hex << "out: 0x" << long(out) << ", value: 0x" << long(value) << std::dec << endl;
 	CHECK(out == value);
@@ -27,13 +27,13 @@ template<typename T1, typename T2>
 OkOrError checkReadBits2(const char* data, size_t len, uint8_t n1, T1 v1, uint8_t n2, T2 v2) {
 	ConstDataReader reader(data, len);
 	BitReader bitReader(&reader);
-	T1 out1 = 0;
-	CHECK_ERR(bitReader.readBits(out1, n1));
+	T1 out1 = bitReader.readBits<T1>(n1);
+	CHECK(!bitReader.reachedEnd());
 	if(out1 != v1)
 		std::cerr << std::hex << "out1: " << "0x" << long(out1) << ", v1: 0x" << long(v1) << std::dec << endl;
 	CHECK(out1 == v1);
-	T2 out2 = 0;
-	CHECK_ERR(bitReader.readBits(out2, n2));
+	T2 out2 = bitReader.readBits<T2>(n2);
+	CHECK(!bitReader.reachedEnd());
 	if(out2 != v2)
 		std::cerr << std::hex << "out2: " << "0x" << long(out2) << ", v2: 0x" << long(v2) << std::dec << endl;
 	CHECK(out2 == v2);

@@ -120,19 +120,24 @@ struct BitReader {
 	// (3-2-1-0) 'big endian' = 'most significant byte first'.
 	// (0-1-2-3) 'little endian' or 'least significant byte first'.
 	// Little endian is what we support.
+	// We allow to reach the end, i.e. this is not an error.
 	IReader* reader_;
 	int last_byte_remaining_bits_; // 0..7
 	uint8_t last_byte_;
-	BitReader(IReader* reader) : reader_(reader), last_byte_remaining_bits_(0), last_byte_(0) {}
+	bool reached_end_;
+	BitReader(IReader* reader) : reader_(reader), last_byte_remaining_bits_(0), last_byte_(0), reached_end_(false) {}
+	
 	template<typename T>
-	OkOrError readBits(T& out, int num) {
+	T readBits(int num) {
 		assert(num > 0 && num <= sizeof(T) * 8);
+		T out = 0;
 		int i = 0;
 		while(num > 0) {
 			if(last_byte_remaining_bits_ == 0) {
 				while(num >= 64) {
 					uint64_t w;
-					CHECK(reader_->read(&w, 8, 1) == 1);
+					if(reader_->read(&w, 8, 1) == 0)
+						break;
 					endian_swap_to_little_endian(w);
 					out += T(w) << i;
 					num -= 64;
@@ -140,7 +145,8 @@ struct BitReader {
 				}
 				while(num >= 32) {
 					uint32_t w;
-					CHECK(reader_->read(&w, 4, 1) == 1);
+					if(reader_->read(&w, 4, 1) == 0)
+						break;
 					endian_swap_to_little_endian(w);
 					out += T(w) << i;
 					num -= 32;
@@ -148,7 +154,8 @@ struct BitReader {
 				}
 				while(num >= 16) {
 					uint16_t w;
-					CHECK(reader_->read(&w, 2, 1) == 1);
+					if(reader_->read(&w, 2, 1) == 0)
+						break;
 					endian_swap_to_little_endian(w);
 					out += T(w) << i;
 					num -= 16;
@@ -156,14 +163,18 @@ struct BitReader {
 				}
 				while(num >= 8) {
 					uint8_t b;
-					CHECK(reader_->read(&b, 1, 1) == 1);
+					if(reader_->read(&b, 1, 1) == 0)
+						break; // handled below
 					out += T(b) << i;
 					num -= 8;
 					i += 8;
 				}
 				if(num == 0)
 					break;
-				CHECK(reader_->read(&last_byte_, 1, 1) == 1);
+				if(reader_->read(&last_byte_, 1, 1) == 0) {
+					reached_end_ = true;
+					break;
+				}
 				last_byte_remaining_bits_ = 8;
 			}
 			out += T(last_byte_ & 1) << i;
@@ -172,14 +183,17 @@ struct BitReader {
 			--num;
 			++i;
 		}
-		return OkOrError();
+		return out;
 	}
+	
 	template<typename T, bool BigEndian=false>
-	OkOrError readBytes(T& out, int num) {
+	T readBytes(int num) {
 		assert(num > 0 && num <= sizeof(T));
 		static_assert(!BigEndian, "not implemented otherwise...");
-		return readBits(out, num * 8);
+		return readBits<T>(num * 8);
 	}
+	
+	bool reachedEnd() const { return reached_end_; }
 };
 
 #endif /* Utils_h */
