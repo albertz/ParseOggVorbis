@@ -102,21 +102,62 @@ static int ilog(unsigned int v) {
 };
 
 
-struct StreamSetup {
-	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
-	uint16_t vorbis_codebook_count;
-	uint8_t vorbis_time_count;
-	uint8_t vorbis_floor_count;
+struct VorbisModeNumber {
+	uint8_t block_flag;
+	uint16_t window_type;
+	uint16_t transform_type;
+	uint8_t mapping;
 	
-	OkOrError parse_setup(BitReader& reader) {
+	OkOrError parse(BitReader& reader) {
+		block_flag = reader.readBitsT<1>();
+		window_type = reader.readBitsT<16>();
+		transform_type = reader.readBitsT<16>();
+		mapping = reader.readBitsT<8>();
+		CHECK(reader.readBitsT<1>() == 1); // framing
+		return OkOrError();
+	}
+};
+
+struct VorbisStreamSetup {
+	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
+	uint16_t codebook_count; // Codebooks
+	uint8_t time_count; // Time domain transforms
+	uint8_t floor_count; // Floors
+	uint8_t residue_count; // Resides
+	uint8_t mapping_count; // Mappings
+	uint8_t mode_count; // Modes
+	std::vector<VorbisModeNumber> modes;
+	
+	OkOrError parse(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs LoadBooks
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/setup_header.go
-		vorbis_codebook_count = uint16_t(reader.readBitsT<8>()) + 1;
+		codebook_count = uint16_t(reader.readBitsT<8>()) + 1;
 		// TODO decode codebooks
-		vorbis_time_count = reader.readBitsT<6>() + 1;
 		
-		// TODO...
+		time_count = reader.readBitsT<6>() + 1;
+		// TODO read time...
+		
+		floor_count = reader.readBitsT<6>() + 1;
+		// TODO read floors
+		
+		residue_count = reader.readBitsT<6>() + 1;
+		// TODO read residues
+		
+		mapping_count = reader.readBitsT<6>() + 1;
+		// TODO read mappings
+		
+		mode_count = reader.readBitsT<6>() + 1;
+		modes.resize(mode_count);
+		for(int i = 0; i < mode_count; ++i)
+			modes[i].parse(reader);
+		
+		CHECK(reader.bitOffset() == 0);
+		CHECK(reader.readBitsT<1>() == 1); // framing
+		CHECK(!reader.reachedEnd()); // not yet...
+		// Check that we are at the end now.
+		CHECK(reader.readBitsT<8>() == 0);
+		CHECK(reader.reachedEnd());
 		return OkOrError();
 	}
 };
@@ -126,7 +167,7 @@ struct StreamInfo {
 	// getCodec(page)
 	// packet buffer...
 	
-	StreamSetup setup;
+	VorbisStreamSetup setup;
 
 	StreamInfo() : packet_counts_(0) {}
 };
@@ -172,7 +213,8 @@ struct VorbisPacket {
 		CHECK(type == 5);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		ConstDataReader reader(data + 7, data_len - 7);
-		stream->setup.parse_setup(reader);
+		BitReader bitReader(&reader);
+		stream->setup.parse(bitReader);
 		CHECK(reader.reachedEnd());  // correct?
 		return OkOrError();
 	}

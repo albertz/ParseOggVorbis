@@ -241,6 +241,7 @@ struct BitReader {
 	}
 
 	bool reachedEnd() const { return reached_end_; }
+	uint8_t bitOffset() const { return (8 - last_byte_remaining_bits_) % 8; }
 };
 
 #endif /* Utils_h */
