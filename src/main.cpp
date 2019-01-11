@@ -80,7 +80,7 @@ struct Page {
 	}
 };
 
-struct __attribute__((packed)) IdHeader {
+struct __attribute__((packed)) VorbisIdHeader {
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.2. Identification header
 	uint32_t vorbis_version;
 	uint8_t audio_channels;
@@ -101,6 +101,37 @@ static int ilog(unsigned int v) {
 	return ret;
 };
 
+struct VorbisCodebook {
+	OkOrError parse(BitReader& reader) {
+		// TODO...
+		return OkOrError();
+	}
+};
+
+struct VorbisFloor {
+	uint16_t floor_type;
+	
+	OkOrError parse(BitReader& reader) {
+		floor_type = reader.readBitsT<16>();
+		CHECK(floor_type == 0 || floor_type == 1);
+		// TODO floor0/floor1 decoding ...
+		return OkOrError();
+	}
+};
+
+struct VorbisResidue {
+	OkOrError parse(BitReader& reader) {
+		// TODO...
+		return OkOrError();
+	}
+};
+
+struct VorbisMapping {
+	OkOrError parse(BitReader& reader) {
+		// TODO...
+		return OkOrError();
+	}
+};
 
 struct VorbisModeNumber {
 	uint8_t block_flag;
@@ -120,39 +151,65 @@ struct VorbisModeNumber {
 
 struct VorbisStreamSetup {
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
-	uint16_t codebook_count; // Codebooks
-	uint8_t time_count; // Time domain transforms
-	uint8_t floor_count; // Floors
-	uint8_t residue_count; // Resides
-	uint8_t mapping_count; // Mappings
-	uint8_t mode_count; // Modes
+	std::vector<VorbisCodebook> codebooks;
+	std::vector<VorbisFloor> floors;
+	std::vector<VorbisResidue> residues;
+	std::vector<VorbisMapping> mappings;
 	std::vector<VorbisModeNumber> modes;
 	
 	OkOrError parse(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs LoadBooks
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/setup_header.go
-		codebook_count = uint16_t(reader.readBitsT<8>()) + 1;
-		// TODO decode codebooks
 		
-		time_count = reader.readBitsT<6>() + 1;
-		// TODO read time...
+		// Codebooks
+		{
+			int count = int(reader.readBitsT<8>()) + 1;
+			codebooks.resize(count);
+			for(int i = 0; i < count; ++i)
+				CHECK_ERR(codebooks[i].parse(reader));
+		}
 		
-		floor_count = reader.readBitsT<6>() + 1;
-		// TODO read floors
+		// Time domain transforms
+		{
+			int count = reader.readBitsT<6>() + 1;
+			for(int i = 0; i < count; ++i)
+				// Just placeholders, but we expect them to be 0.
+				CHECK(reader.readBitsT<16>() == 0);
+		}
 		
-		residue_count = reader.readBitsT<6>() + 1;
-		// TODO read residues
+		// Floors
+		{
+			int count = reader.readBitsT<6>() + 1;
+			floors.resize(count);
+			for(int i = 0; i < count; ++i)
+				CHECK_ERR(floors[i].parse(reader));
+		}
 		
-		mapping_count = reader.readBitsT<6>() + 1;
-		// TODO read mappings
+		// Residues
+		{
+			int count = reader.readBitsT<6>() + 1;
+			residues.resize(count);
+			for(int i = 0; i < count; ++i)
+				CHECK_ERR(residues[i].parse(reader));
+		}
 		
-		mode_count = reader.readBitsT<6>() + 1;
-		modes.resize(mode_count);
-		for(int i = 0; i < mode_count; ++i)
-			modes[i].parse(reader);
+		// Mappings
+		{
+			int count = reader.readBitsT<6>() + 1;
+			mappings.resize(count);
+			for(int i = 0; i < count; ++i)
+				CHECK_ERR(mappings[i].parse(reader));
+		}
 		
-		CHECK(reader.bitOffset() == 0);
+		// Modes
+		{
+			int count = reader.readBitsT<6>() + 1;
+			modes.resize(count);
+			for(int i = 0; i < count; ++i)
+				CHECK_ERR(modes[i].parse(reader));
+		}
+		
 		CHECK(reader.readBitsT<1>() == 1); // framing
 		CHECK(!reader.reachedEnd()); // not yet...
 		// Check that we are at the end now.
@@ -167,6 +224,7 @@ struct StreamInfo {
 	// getCodec(page)
 	// packet buffer...
 	
+	VorbisIdHeader header;
 	VorbisStreamSetup setup;
 
 	StreamInfo() : packet_counts_(0) {}
@@ -184,13 +242,13 @@ struct VorbisPacket {
 		uint8_t type = data[0];
 		CHECK(type == 1);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
-		CHECK(data_len - 7 == sizeof(IdHeader));
-		IdHeader header;
-		memcpy(&header, &data[7], sizeof(IdHeader));
+		CHECK(data_len - 7 == sizeof(VorbisIdHeader));
+		VorbisIdHeader& header = stream->header;
+		memcpy(&header, &data[7], sizeof(VorbisIdHeader));
 		std::cout << "vorbis version: " << header.vorbis_version
 		<< ", channels: " << (int) header.audio_channels
 		<< ", sample rate: " << header.audio_sample_rate << std::endl;
-		CHECK(header.framing_flag & 1);
+		CHECK(header.framing_flag == 1);
 		return OkOrError();
 	}
 	
@@ -214,8 +272,8 @@ struct VorbisPacket {
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		ConstDataReader reader(data + 7, data_len - 7);
 		BitReader bitReader(&reader);
-		stream->setup.parse(bitReader);
-		CHECK(reader.reachedEnd());  // correct?
+		CHECK_ERR(stream->setup.parse(bitReader));
+		CHECK(reader.reachedEnd());
 		return OkOrError();
 	}
 	
