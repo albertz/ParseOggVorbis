@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 #include <string>
 #include <iostream>
 #ifdef __APPLE__
@@ -33,11 +34,11 @@ struct OkOrError {
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define CHECK(v) do { if(!(v)) return OkOrError(__FILE__ ":" TOSTRING(__LINE__) ": check failed: " #v); } while(0)
+#define CHECK(v) do { if(!(v)) { abort(); return OkOrError(__FILE__ ":" TOSTRING(__LINE__) ": check failed: " #v); } } while(0)
 #define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
 #define ASSERT_ERR(v) do { OkOrError res = (v); if(res.is_error_) { std::cerr << "assertion failed, has error: " << res.err_msg_ << std::endl; } assert(!res.is_error_); } while(0)
 
-inline int highest_bit(unsigned int v) {
+inline int highest_bit(unsigned int v) { // ilog in Vorbis documentation
 	int ret = 0;
 	while(v) {
 		++ret;
@@ -46,19 +47,54 @@ inline int highest_bit(unsigned int v) {
 	return ret;
 }
 
+/* 32 bit float (not IEEE; nonnormalized mantissa +
+ biased exponent) : neeeeeee eeemmmmm mmmmmmmm mmmmmmmm
+ Vorbis ref code: Why not IEEE?  It's just not that important here. */
+
+static constexpr int VQ_FEXP = 10;
+static constexpr int VQ_FMAN = 21;
+static constexpr int VQ_FEXP_BIAS = 768;
+
+inline double float32_unpack(uint32_t v) {
+	double mant = v & 0x1fffff;
+	bool sign = v & 0x80000000;
+	long exp = (v & 0x7fe00000L) >> VQ_FMAN;
+	if(sign) mant = -mant;
+	exp = exp - (VQ_FMAN - 1) - VQ_FEXP_BIAS;
+	if(exp > 63) exp = 63;
+	if(exp < -63) exp = -63;
+	return ldexp(mant, int(exp));
+}
+
+template<typename BaseT>
+BaseT powIntExp(BaseT base, int exponent) {
+	if(exponent > 0) {
+		if(exponent % 2 == 0) {
+			BaseT x = powIntExp(base, exponent / 2);
+			return x * x;
+		}
+		return powIntExp(base, exponent - 1) * base;
+	}
+	else if(exponent < 0)
+		return powIntExp(1 / base, -exponent);
+	return 1;
+}
+
 inline void endian_swap(uint16_t& x) {
 	x = ((x>>8) & 0x00FF) | ((x<<8) & 0xFF00);
 }
 
 inline void endian_swap(uint32_t& x) {
-	x = ((x<<24) & 0xFF000000) |
+	x =
+	((x<<24) & 0xFF000000) |
 	((x<<8)  & 0x00FF0000) |
 	((x>>8)  & 0x0000FF00) |
 	((x>>24) & 0x000000FF);
 }
 
 inline void endian_swap(uint64_t& x) {
-	x = ((x<<56) & 0xFF00000000000000) |
+	x =
+	((x<<56) & 0xFF00000000000000) |
 	((x<<40) & 0x00FF000000000000) |
 	((x<<24) & 0x0000FF0000000000) |
 	((x<<8)  & 0x000000FF00000000) |

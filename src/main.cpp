@@ -100,14 +100,26 @@ struct VorbisCodebook {
 	bool sparse;
 	std::vector<uint8_t> codeword_lengths; // 0 is unused
 	uint8_t lookup_type;
+	double minimum_value;
+	double delta_value;
+	uint8_t value_bits;
+	bool sequence_p;
+	uint32_t num_lookup_values;
+	std::vector<uint32_t> multiplicands;
 	
 	OkOrError parse(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisCodebook.cs
+		// https://github.com/xiph/vorbis/blob/master/lib/codebook.c
+		// https://github.com/susimus/ogg_vorbis/
+		// https://github.com/Samulus/hz/blob/master/src/lib/vorbis.d
+		// https://github.com/latelee/my_live555/blob/master/liveMedia/OggFileParser.cpp
 		CHECK(reader.readBitsT<24>() == 0x564342); // sync pattern
 		dimensions = reader.readBitsT<16>();
+		CHECK(dimensions > 0);
 		num_entries = reader.readBitsT<24>();
+		CHECK(num_entries > 0);
 		codeword_lengths.resize(num_entries);
 		ordered = reader.readBitsT<1>();
 		
@@ -141,7 +153,33 @@ struct VorbisCodebook {
 		}
 		
 		lookup_type = reader.readBitsT<4>();
-		CHECK(lookup_type == 0); // TODO implement...
+		CHECK(lookup_type == 0 || lookup_type == 1 || lookup_type == 2);
+		if(lookup_type == 0) {
+			// not used
+			minimum_value = 0; delta_value = 0;
+			value_bits = 0; sequence_p = false;
+			num_lookup_values = 0;
+		}
+		else if(lookup_type == 1 || lookup_type == 2) {
+			minimum_value = float32_unpack(reader.readBitsT<32>());
+			delta_value = float32_unpack(reader.readBitsT<32>());
+			value_bits = reader.readBitsT<4>() + 1;
+			sequence_p = reader.readBitsT<1>();
+			if(lookup_type == 1) {
+				// lookup1_values:
+				// the greatest integer value for which [num_lookup_values] to the power of [codebook_dimensions] is less than or equal to [codebook_entries]’.
+				num_lookup_values = 0;
+				while(powIntExp(num_lookup_values + 1, dimensions) <= num_entries)
+					++num_lookup_values;
+			}
+			else
+				num_lookup_values = num_entries * dimensions;
+		}
+		else
+			assert(false);
+		multiplicands.resize(num_lookup_values);
+		for(int i = 0; i < num_lookup_values; ++i)
+			multiplicands[i] = reader.readBits<uint32_t>(value_bits);
 		
 		CHECK(!reader.reachedEnd());
 		return OkOrError();
