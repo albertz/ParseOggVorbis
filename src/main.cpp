@@ -186,43 +186,205 @@ struct VorbisCodebook {
 	}
 };
 
-struct VorbisFloor {
-	uint16_t floor_type;
+struct VorbisFloor0 {
+	uint8_t order;
+	uint16_t rate;
+	uint16_t bark_map_size;
+	uint8_t amplitude_bits;
+	uint8_t amplitude_offset;
+	std::vector<uint8_t> books;
+	
+	OkOrError parse(BitReader& reader, int max_books) {
+		order = reader.readBitsT<8>();
+		rate = reader.readBitsT<16>();
+		bark_map_size = reader.readBitsT<16>();
+		amplitude_bits = reader.readBitsT<6>();
+		amplitude_offset = reader.readBitsT<8>();
+		int num_books = reader.readBitsT<4>() + 1;
+		books.resize(num_books);
+		for(int i = 0; i < num_books; ++i) {
+			books[i] = reader.readBitsT<8>();
+			CHECK(books[i] >= 0 && books[i] < max_books);
+		}
+		return OkOrError();
+	}
+};
+
+struct VorbisFloorClass {
+	uint8_t dimensions;
+	uint8_t subclass;
+	uint8_t masterbook;
+	std::vector<int> subclass_books;
+	VorbisFloorClass() : dimensions(0), subclass(0), masterbook(0) {}
+};
+
+struct VorbisFloor1 {
+	std::vector<uint8_t> partition_classes;
+	std::vector<VorbisFloorClass> classes;
+	uint8_t multiplier;
+	std::vector<uint32_t> xs;
 	
 	OkOrError parse(BitReader& reader) {
+		int num_partitions = reader.readBitsT<5>();
+		int max_class = -1;
+		partition_classes.resize(num_partitions);
+		for(int i = 0; i < num_partitions; ++i) {
+			partition_classes[i] = reader.readBitsT<4>();
+			if(partition_classes[i] > max_class)
+				max_class = partition_classes[i];
+		}
+		
+		classes.resize(max_class + 1);
+		for(VorbisFloorClass& cl : classes) {
+			cl.dimensions = reader.readBitsT<3>() + 1;
+			cl.subclass = reader.readBitsT<2>();
+			if(cl.subclass > 0)
+				cl.masterbook = reader.readBitsT<8>();
+			cl.subclass_books.resize(1 << cl.subclass);
+			for(auto& x : cl.subclass_books)
+				x = int(reader.readBitsT<8>()) - 1;
+		}
+		
+		multiplier = reader.readBitsT<2>() + 1;
+		uint8_t rangebits = reader.readBitsT<4>();
+		xs.resize(2);
+		xs[0] = 0;
+		xs[1] = 1 << rangebits;
+		for(uint8_t class_idx : partition_classes) {
+			CHECK(class_idx >= 0 && class_idx < classes.size());
+			VorbisFloorClass& cl = classes[class_idx];
+			for(int j = 0; j < cl.dimensions; ++j)
+				xs.push_back(reader.readBits<uint32_t>(rangebits));
+		}
+		return OkOrError();
+	}
+};
+
+struct VorbisFloor {
+	uint16_t floor_type;
+	VorbisFloor0 floor0;
+	VorbisFloor1 floor1;
+	
+	OkOrError parse(BitReader& reader, int num_codebooks) {
 		floor_type = reader.readBitsT<16>();
 		CHECK(floor_type == 0 || floor_type == 1);
-		// TODO floor0/floor1 decoding ...
+		if(floor_type == 0)
+			CHECK_ERR(floor0.parse(reader, num_codebooks));
+		else if(floor_type == 1)
+			CHECK_ERR(floor1.parse(reader));
+		else
+			assert(false);
 		return OkOrError();
 	}
 };
 
 struct VorbisResidue {
+	uint16_t type;
+	uint32_t begin, end;
+	uint32_t partition_size;
+	uint8_t num_classifications;
+	uint8_t classbook;
+	std::vector<uint32_t> cascades;
+	std::vector<uint8_t> books;
+	
 	OkOrError parse(BitReader& reader) {
+		type = reader.readBitsT<16>();
+		CHECK(type >= 0 && type <= 2);
+		begin = reader.readBitsT<24>();
+		end = reader.readBitsT<24>();
+		partition_size = reader.readBitsT<24>() + 1;
+		num_classifications = reader.readBitsT<6>() + 1;
+		classbook = reader.readBitsT<8>();
+		
+		cascades.resize(num_classifications);
+		for(uint32_t& x : cascades) {
+			uint32_t high_bits = 0;
+			uint32_t low_bits = reader.readBitsT<3>();
+			bool bit_flag = reader.readBitsT<1>();
+			if(bit_flag) high_bits = reader.readBitsT<5>();
+			x = high_bits * 8 + low_bits;
+		}
+		
+		books.resize(num_classifications * 8);
+		for(int i = 0; i < num_classifications; ++i) {
+			for(int j = 0; j < 8; ++j) {
+				if(cascades[i] & (uint32_t(1) << j))
+					books[i * 8 + j] = reader.readBitsT<8>();
+				else
+					books[i * 8 + j] = -1; // TODO: good placeholder?
+			}
+		}
+		
 		// TODO...
 		return OkOrError();
 	}
 };
 
 struct VorbisMapping {
-	OkOrError parse(BitReader& reader) {
-		// TODO...
+	uint16_t type;
+	struct Coupling { int magintude, angle; };
+	std::vector<Coupling> couplings;
+	std::vector<uint8_t> muxs;
+	struct Submap { uint8_t floor, residue; };
+	std::vector<Submap> submaps;
+	
+	OkOrError parse(BitReader& reader, int num_channels, int num_floors, int num_residues) {
+		assert(num_channels > 0);
+		int bits = highest_bit(num_channels - 1);
+		type = reader.readBitsT<16>();
+		CHECK(type == 0);
+		bool flag = reader.readBitsT<1>();
+		int num_submaps = 1;
+		if(flag)
+			num_submaps = reader.readBitsT<4>() + 1;
+		if(reader.readBitsT<1>()) {
+			int coupling_steps = int(reader.readBitsT<8>()) + 1;
+			couplings.resize(coupling_steps);
+			for(Coupling& coupling : couplings) {
+				coupling.magintude = reader.readBits<uint16_t>(bits);
+				coupling.angle = reader.readBits<uint16_t>(bits);
+				CHECK(coupling.magintude != coupling.angle);
+				CHECK(coupling.magintude < num_channels);
+				CHECK(coupling.angle < num_channels);
+			}
+		}
+		CHECK(reader.readBitsT<2>() == 0);
+		
+		muxs.resize(num_channels);
+		if(num_submaps > 1) {
+			for(uint8_t& x : muxs) {
+				x = reader.readBitsT<4>();
+				CHECK(x < num_submaps);
+			}
+		}
+		
+		submaps.resize(num_submaps);
+		for(Submap& submap : submaps) {
+			reader.readBitsT<8>(); // explicitly discarded
+			submap.floor = reader.readBitsT<8>();
+			CHECK(submap.floor < num_floors);
+			submap.residue = reader.readBitsT<8>();
+			CHECK(submap.residue < num_residues);
+		}
+		
 		return OkOrError();
 	}
 };
 
 struct VorbisModeNumber {
-	uint8_t block_flag;
+	bool block_flag;
 	uint16_t window_type;
 	uint16_t transform_type;
 	uint8_t mapping;
 	
-	OkOrError parse(BitReader& reader) {
+	OkOrError parse(BitReader& reader, int num_mappings) {
 		block_flag = reader.readBitsT<1>();
 		window_type = reader.readBitsT<16>();
+		CHECK(window_type == 0);
 		transform_type = reader.readBitsT<16>();
+		CHECK(transform_type == 0);
 		mapping = reader.readBitsT<8>();
-		CHECK(reader.readBitsT<1>() == 1); // framing
+		CHECK(mapping < num_mappings);
 		return OkOrError();
 	}
 };
@@ -235,7 +397,7 @@ struct VorbisStreamSetup {
 	std::vector<VorbisMapping> mappings;
 	std::vector<VorbisModeNumber> modes;
 	
-	OkOrError parse(BitReader& reader) {
+	OkOrError parse(BitReader& reader, int num_channels) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs LoadBooks
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/setup_header.go
@@ -263,7 +425,7 @@ struct VorbisStreamSetup {
 			int count = reader.readBitsT<6>() + 1;
 			floors.resize(count);
 			for(int i = 0; i < count; ++i)
-				CHECK_ERR(floors[i].parse(reader));
+				CHECK_ERR(floors[i].parse(reader, (int)codebooks.size()));
 			CHECK(!reader.reachedEnd());
 		}
 
@@ -281,7 +443,7 @@ struct VorbisStreamSetup {
 			int count = reader.readBitsT<6>() + 1;
 			mappings.resize(count);
 			for(int i = 0; i < count; ++i)
-				CHECK_ERR(mappings[i].parse(reader));
+				CHECK_ERR(mappings[i].parse(reader, num_channels, (int)floors.size(), (int)residues.size()));
 			CHECK(!reader.reachedEnd());
 		}
 
@@ -290,7 +452,7 @@ struct VorbisStreamSetup {
 			int count = reader.readBitsT<6>() + 1;
 			modes.resize(count);
 			for(int i = 0; i < count; ++i)
-				CHECK_ERR(modes[i].parse(reader));
+				CHECK_ERR(modes[i].parse(reader, (int)mappings.size()));
 			CHECK(!reader.reachedEnd());
 		}
 
@@ -356,7 +518,7 @@ struct VorbisPacket {
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		ConstDataReader reader(data + 7, data_len - 7);
 		BitReader bitReader(&reader);
-		CHECK_ERR(stream->setup.parse(bitReader));
+		CHECK_ERR(stream->setup.parse(bitReader, stream->header.audio_channels));
 		CHECK(reader.reachedEnd());
 		return OkOrError();
 	}
