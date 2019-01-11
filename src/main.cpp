@@ -315,7 +315,6 @@ struct VorbisResidue {
 			}
 		}
 		
-		// TODO...
 		return OkOrError();
 	}
 };
@@ -474,6 +473,25 @@ struct StreamInfo {
 	VorbisStreamSetup setup;
 
 	StreamInfo() : packet_counts_(0) {}
+	
+	OkOrError parse_audio(BitReader& reader) {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
+		CHECK(reader.readBitsT<1>() == 0);
+		assert(setup.modes.size() > 0);
+		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
+		VorbisModeNumber& mode = setup.modes[mode_idx];
+		VorbisMapping& mapping = setup.mappings[mode.mapping];
+		// TODO window...
+		if(mode.block_flag) {
+			bool prev_window_flag = reader.readBitsT<1>();
+			bool next_window_flag = reader.readBitsT<1>();
+		}
+		// TODO floor curves, do floor decode
+		// TODO residuce decode
+		
+		return OkOrError();
+	}
 };
 
 
@@ -525,8 +543,10 @@ struct VorbisPacket {
 	
 	OkOrError parse_audio() {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
-		// TODO ...
-		return OkOrError();
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
+		ConstDataReader reader(data, data_len);
+		BitReader bitReader(&reader);
+		return stream->parse_audio(bitReader);
 	}
 };
 
@@ -581,6 +601,9 @@ struct OggReader {
 			len += buffer_page_.segment_table[segment_i];
 			if(buffer_page_.segment_table[segment_i] < 255) {
 				// new packet
+				// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+				// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
+				// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
 				VorbisPacket packet;
 				packet.stream = &stream;
 				packet.data = buffer_page_.data + offset;

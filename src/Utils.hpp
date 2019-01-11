@@ -38,7 +38,9 @@ struct OkOrError {
 #define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
 #define ASSERT_ERR(v) do { OkOrError res = (v); if(res.is_error_) { std::cerr << "assertion failed, has error: " << res.err_msg_ << std::endl; } assert(!res.is_error_); } while(0)
 
-inline int highest_bit(unsigned int v) { // ilog in Vorbis documentation
+template<typename T>
+inline int highest_bit(T v) { // ilog in Vorbis documentation
+	assert(v >= 0);
 	int ret = 0;
 	while(v) {
 		++ret;
