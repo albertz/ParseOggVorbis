@@ -37,6 +37,14 @@ struct OkOrError {
 #define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
 #define ASSERT_ERR(v) do { OkOrError res = (v); if(res.is_error_) { std::cerr << "assertion failed, has error: " << res.err_msg_ << std::endl; } assert(!res.is_error_); } while(0)
 
+inline int highest_bit(unsigned int v) {
+	int ret = 0;
+	while(v) {
+		++ret;
+		v >>= 1;
+	}
+	return ret;
+}
 
 inline void endian_swap(uint16_t& x) {
 	x = ((x>>8) & 0x00FF) | ((x<<8) & 0xFF00);

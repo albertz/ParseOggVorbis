@@ -92,18 +92,58 @@ struct __attribute__((packed)) VorbisIdHeader {
 	uint8_t framing_flag;
 };
 
-static int ilog(unsigned int v) {
-	int ret = 0;
-	while(v) {
-		++ret;
-		v >>= 1;
-	}
-	return ret;
-};
 
 struct VorbisCodebook {
+	uint16_t dimensions;
+	uint32_t num_entries;
+	bool ordered;
+	bool sparse;
+	std::vector<uint8_t> codeword_lengths; // 0 is unused
+	uint8_t lookup_type;
+	
 	OkOrError parse(BitReader& reader) {
-		// TODO...
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
+		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisCodebook.cs
+		CHECK(reader.readBitsT<24>() == 0x564342); // sync pattern
+		dimensions = reader.readBitsT<16>();
+		num_entries = reader.readBitsT<24>();
+		codeword_lengths.resize(num_entries);
+		ordered = reader.readBitsT<1>();
+		
+		if(!ordered) {
+			sparse = reader.readBitsT<1>();
+			if(sparse) {
+				for(int i = 0; i < num_entries; ++i) {
+					bool flag = reader.readBitsT<1>();
+					if(flag)
+						codeword_lengths[i] = reader.readBitsT<5>() + 1;
+					else
+						codeword_lengths[i] = 0; // unused
+				}
+			}
+			else { // not sparse
+				for(int i = 0; i < num_entries; ++i)
+					codeword_lengths[i] = reader.readBitsT<5>() + 1;
+			}
+		}
+		else { // ordered flag is set
+			sparse = false; // not used
+			for(int cur_entry = 0; cur_entry < num_entries;) {
+				int cur_len = reader.readBitsT<5>() + 1;
+				int number = reader.readBits<int>(highest_bit(num_entries - cur_entry));
+				for(int i = cur_entry; i < cur_entry + number; ++i)
+					codeword_lengths[i] = cur_len;
+				cur_entry += number;
+				++cur_len;
+				CHECK(cur_entry <= num_entries);
+			}
+		}
+		
+		lookup_type = reader.readBitsT<4>();
+		CHECK(lookup_type == 0); // TODO implement...
+		
+		CHECK(!reader.reachedEnd());
 		return OkOrError();
 	}
 };
@@ -168,48 +208,54 @@ struct VorbisStreamSetup {
 			codebooks.resize(count);
 			for(int i = 0; i < count; ++i)
 				CHECK_ERR(codebooks[i].parse(reader));
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		// Time domain transforms
 		{
 			int count = reader.readBitsT<6>() + 1;
 			for(int i = 0; i < count; ++i)
 				// Just placeholders, but we expect them to be 0.
 				CHECK(reader.readBitsT<16>() == 0);
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		// Floors
 		{
 			int count = reader.readBitsT<6>() + 1;
 			floors.resize(count);
 			for(int i = 0; i < count; ++i)
 				CHECK_ERR(floors[i].parse(reader));
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		// Residues
 		{
 			int count = reader.readBitsT<6>() + 1;
 			residues.resize(count);
 			for(int i = 0; i < count; ++i)
 				CHECK_ERR(residues[i].parse(reader));
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		// Mappings
 		{
 			int count = reader.readBitsT<6>() + 1;
 			mappings.resize(count);
 			for(int i = 0; i < count; ++i)
 				CHECK_ERR(mappings[i].parse(reader));
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		// Modes
 		{
 			int count = reader.readBitsT<6>() + 1;
 			modes.resize(count);
 			for(int i = 0; i < count; ++i)
 				CHECK_ERR(modes[i].parse(reader));
+			CHECK(!reader.reachedEnd());
 		}
-		
+
 		CHECK(reader.readBitsT<1>() == 1); // framing
 		CHECK(!reader.reachedEnd()); // not yet...
 		// Check that we are at the end now.
