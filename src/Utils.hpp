@@ -290,4 +290,28 @@ struct BitReader {
 	uint8_t bitOffset() const { return (8 - last_byte_remaining_bits_) % 8; }
 };
 
+template<typename T>
+struct DataRange {
+	T* data_; // not owned
+	size_t size_;
+	
+	DataRange() : data_(nullptr), size_(0) {}
+	DataRange(T* data, size_t size) : data_(data), size_(size) {}
+	T& operator[](size_t i) {
+		assert(data_);
+		assert(i >= 0 && i < size_);
+		return data_[i];
+	}
+	const T& operator[](size_t i) const {
+		assert(data_);
+		assert(i >= 0 && i < size_);
+		return data_[i];
+	}
+	T* begin() { return data_; }
+	T* end() { return data_ + size_; }
+	const T* begin() const { return data_; }
+	const T* end() const { return data_ + size_; }
+	size_t size() const { return size_; }
+};
+
 #endif /* Utils_h */

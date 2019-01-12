@@ -88,7 +88,9 @@ struct __attribute__((packed)) VorbisIdHeader {
 	uint32_t bitrate_maximum;
 	uint32_t bitrate_nominal;
 	uint32_t bitrate_minimum;
-	uint8_t blocksize;
+	uint8_t blocksizes_exp;
+	int get_blocksize_0() const { return int(1) << (blocksizes_exp & 0x0f); }
+	int get_blocksize_1() const { return int(1) << ((blocksizes_exp & 0xf0) >> 4); }
 	uint8_t framing_flag;
 };
 
@@ -375,8 +377,11 @@ struct VorbisModeNumber {
 	uint16_t window_type;
 	uint16_t transform_type;
 	uint8_t mapping;
+	// precalculated
+	int blocksize;
+	std::vector<float> windows;
 	
-	OkOrError parse(BitReader& reader, int num_mappings) {
+	OkOrError parse(BitReader& reader, int num_mappings, VorbisIdHeader& header) {
 		block_flag = reader.readBitsT<1>();
 		window_type = reader.readBitsT<16>();
 		CHECK(window_type == 0);
@@ -384,7 +389,56 @@ struct VorbisModeNumber {
 		CHECK(transform_type == 0);
 		mapping = reader.readBitsT<8>();
 		CHECK(mapping < num_mappings);
+		CHECK_ERR(precalc(header));
 		return OkOrError();
+	}
+	
+	OkOrError precalc(VorbisIdHeader& header) {
+		int blocksize0 = header.get_blocksize_0();
+		int blocksize1 = header.get_blocksize_1();
+		blocksize = block_flag ? blocksize1 : blocksize0;
+		windows.resize(block_flag ? (blocksize * 4) : blocksize);
+		for(int win_idx = 0; win_idx < (block_flag ? 4 : 1); ++win_idx) {
+			DataRange<float> window = _getWindow(win_idx);
+			bool prev = win_idx & 1;
+			bool next = win_idx & 2;
+			int left = (prev ? blocksize1 : blocksize0) / 2;
+			int right = (next ? blocksize1 : blocksize0) / 2;
+			int left_begin = blocksize / 4 - left / 2;
+			int right_begin = blocksize - blocksize / 4 - right / 2;
+			for(int i = 0; i < left; ++i) {
+				float x = sinf(M_PI_2 * (i + 0.5) / left);
+				x *= x;
+				window[left_begin + i] = sinf(M_PI_2 * x);
+			}
+			for(int i = left_begin + left; i < right_begin; ++i)
+				window[i] = 1;
+			for(int i = 0; i < right; ++i) {
+				float x = sinf(M_PI_2 * (right - i - .5) / right);
+				x *= x;
+				window[right_begin + i] = sinf(M_PI_2 * x);
+			}
+		}
+		return OkOrError();
+	}
+	
+	DataRange<float> _getWindow(int idx) {
+		assert(idx >= 0 && idx < (block_flag ? 4 : 1));
+		return DataRange<float>(&windows[idx * blocksize], blocksize);
+	}
+	
+	DataRange<float> getWindow(bool prev, bool next) {
+		int win_idx = 0;
+		if(block_flag) {
+			if(next) {
+				if(prev) win_idx = 3;
+				else win_idx = 2;
+			}
+			else if(prev) { // and not next
+				win_idx = 1;
+			}
+		}
+		return _getWindow(win_idx);
 	}
 };
 
@@ -396,10 +450,11 @@ struct VorbisStreamSetup {
 	std::vector<VorbisMapping> mappings;
 	std::vector<VorbisModeNumber> modes;
 	
-	OkOrError parse(BitReader& reader, int num_channels) {
+	OkOrError parse(BitReader& reader, VorbisIdHeader& header) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs LoadBooks
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/setup_header.go
+		int num_channels = header.audio_channels;
 		
 		// Codebooks
 		{
@@ -451,7 +506,7 @@ struct VorbisStreamSetup {
 			int count = reader.readBitsT<6>() + 1;
 			modes.resize(count);
 			for(int i = 0; i < count; ++i)
-				CHECK_ERR(modes[i].parse(reader, (int)mappings.size()));
+				CHECK_ERR(modes[i].parse(reader, (int)mappings.size(), header));
 			CHECK(!reader.reachedEnd());
 		}
 
@@ -460,6 +515,24 @@ struct VorbisStreamSetup {
 		// Check that we are at the end now.
 		CHECK(reader.readBitsT<8>() == 0);
 		CHECK(reader.reachedEnd());
+		return OkOrError();
+	}
+};
+
+struct Window {
+	int n;
+	
+	OkOrError parse(BitReader& reader, VorbisIdHeader& header, VorbisModeNumber& mode, VorbisMapping& mapping) {
+		bool prev_window_flag = false, next_window_flag = false;
+		if(mode.block_flag) {
+			n = header.get_blocksize_1();
+			prev_window_flag = reader.readBitsT<1>();
+			next_window_flag = reader.readBitsT<1>();
+		}
+		else
+			n = header.get_blocksize_0();
+		int window_center = n / 2;
+		
 		return OkOrError();
 	}
 };
@@ -536,7 +609,7 @@ struct VorbisPacket {
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		ConstDataReader reader(data + 7, data_len - 7);
 		BitReader bitReader(&reader);
-		CHECK_ERR(stream->setup.parse(bitReader, stream->header.audio_channels));
+		CHECK_ERR(stream->setup.parse(bitReader, stream->header));
 		CHECK(reader.reachedEnd());
 		return OkOrError();
 	}
