@@ -14,3 +14,4 @@ cmake_install.cmake
 .kdev4
 *.kdev4
 
+/audio-examples
