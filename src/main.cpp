@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 #include "Utils.hpp"
 
 

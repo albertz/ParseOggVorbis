@@ -108,19 +108,17 @@ inline void endian_swap(uint64_t& x) {
 	((x>>56) & 0x00000000000000FF);
 }
 
-template<typename T>
-inline void endian_swap_to_big_endian(T& x) {
-#if BYTE_ORDER == LITTLE_ENDIAN
-	endian_swap(x);
-#endif
-}
+// Also works with packed fields.
+#define endian_swap_generic(x) do { auto tmp = (x); endian_swap(tmp); (x) = tmp; } while(0)
 
-template<typename T>
-inline void endian_swap_to_little_endian(T& x) {
-#if BYTE_ORDER == BIG_ENDIAN
-	endian_swap(x);
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define endian_swap_to_big_endian(x) endian_swap_generic(x)
+#define endian_swap_to_little_endian(x)
 #endif
-}
+#if BYTE_ORDER == BIG_ENDIAN
+#define endian_swap_to_big_endian(x)
+#define endian_swap_to_little_endian(x) endian_swap_generic(x)
+#endif
 
 
 struct IReader {
