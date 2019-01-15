@@ -18,7 +18,17 @@
 #include "Utils.hpp"
 
 
-// Documentation: https://xiph.org/vorbis/doc/
+// Documentation:
+// main page: https://xiph.org/vorbis/doc/
+// detailed spec page: https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+// Go Vorbis code: https://github.com/runningwild/gorbis/tree/master/vorbis
+// C# Vorbis code: https://github.com/ioctlLR/NVorbis/tree/master/NVorbis
+// ref C Vorbis code: https://github.com/xiph/vorbis/tree/master/lib
+// Python Vorbis code: https://github.com/susimus/ogg_vorbis/
+// D Vorbis code: https://github.com/Samulus/hz/blob/master/src/lib/vorbis.d
+// C++ Vorbis code: https://github.com/latelee/my_live555/blob/master/liveMedia/OggFileParser.cpp
+
+
 
 // Page + page header is described here:
 // https://xiph.org/vorbis/doc/framing.html
@@ -102,7 +112,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	bool ordered;
 	bool sparse;
 	// Entries:
-	// [i] : lens (0 = unused), [i] codeword?, num?
+	// [i] : lens (0 = unused), [i] codeword?, num? TODO
 	std::vector<uint8_t> codeword_lengths; // 0 is unused
 	uint8_t lookup_type;
 	double minimum_value;
@@ -191,6 +201,8 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	}
 	
 	int decodeScalar(BitReader& reader) {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
 		// TODO
 		uint32_t word = 0;
 		for(uint8_t len = 0; len < 32; ++len) {
