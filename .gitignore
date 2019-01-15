@@ -4,3 +4,9 @@
 project.xcworkspace
 xcshareddata
 xcuserdata
+
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+/Makefile
+/src/Makefile
