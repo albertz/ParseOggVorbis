@@ -212,7 +212,7 @@ struct BitReader {
 	
 	template<typename T>
 	T readBits(int num) {
-		assert(num > 0 && num <= sizeof(T) * 8);
+		assert(num > 0 && (unsigned int)(num) <= sizeof(T) * 8);
 		T out = 0;
 		int i = 0;
 		while(num > 0) {

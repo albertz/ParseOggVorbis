@@ -131,7 +131,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		if(!ordered) {
 			sparse = reader.readBitsT<1>();
 			if(sparse) {
-				for(int i = 0; i < num_entries; ++i) {
+				for(uint32_t i = 0; i < num_entries; ++i) {
 					bool flag = reader.readBitsT<1>();
 					if(flag)
 						codeword_lengths[i] = reader.readBitsT<5>() + 1;
@@ -140,16 +140,16 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				}
 			}
 			else { // not sparse
-				for(int i = 0; i < num_entries; ++i)
+				for(uint32_t i = 0; i < num_entries; ++i)
 					codeword_lengths[i] = reader.readBitsT<5>() + 1;
 			}
 		}
 		else { // ordered flag is set
 			sparse = false; // not used
-			for(int cur_entry = 0; cur_entry < num_entries;) {
-				int cur_len = reader.readBitsT<5>() + 1;
-				int number = reader.readBits<int>(highest_bit(num_entries - cur_entry));
-				for(int i = cur_entry; i < cur_entry + number; ++i)
+			for(uint32_t cur_entry = 0; cur_entry < num_entries;) {
+				uint8_t cur_len = reader.readBitsT<5>() + 1;
+				uint32_t number = reader.readBits<uint32_t>(highest_bit(num_entries - cur_entry));
+				for(uint32_t i = cur_entry; i < cur_entry + number; ++i)
 					codeword_lengths[i] = cur_len;
 				cur_entry += number;
 				++cur_len;
@@ -183,7 +183,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		else
 			assert(false);
 		multiplicands.resize(num_lookup_values);
-		for(int i = 0; i < num_lookup_values; ++i)
+		for(uint32_t i = 0; i < num_lookup_values; ++i)
 			multiplicands[i] = reader.readBits<uint32_t>(value_bits);
 		
 		CHECK(!reader.reachedEnd());
@@ -193,7 +193,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	int decodeScalar(BitReader& reader) {
 		// TODO
 		uint32_t word = 0;
-		for(int len = 0; len < 32; ++len) {
+		for(uint8_t len = 0; len < 32; ++len) {
 			
 			//for(uint8_t codeword_lengths );
 		}
@@ -219,7 +219,7 @@ struct VorbisFloor0 {
 		books.resize(num_books);
 		for(int i = 0; i < num_books; ++i) {
 			books[i] = reader.readBitsT<8>();
-			CHECK(books[i] >= 0 && books[i] < max_books);
+			CHECK(books[i] < max_books);
 		}
 		return OkOrError();
 	}
@@ -271,7 +271,7 @@ struct VorbisFloor1 {
 		xs[0] = 0;
 		xs[1] = 1 << rangebits;
 		for(uint8_t class_idx : partition_classes) {
-			CHECK(class_idx >= 0 && class_idx < classes.size());
+			CHECK(class_idx < classes.size());
 			VorbisFloorClass& cl = classes[class_idx];
 			for(int j = 0; j < cl.dimensions; ++j)
 				xs.push_back(reader.readBits<uint32_t>(rangebits));
@@ -359,7 +359,7 @@ struct VorbisResidue {
 	
 	OkOrError parse(BitReader& reader) {
 		type = reader.readBitsT<16>();
-		CHECK(type >= 0 && type <= 2);
+		CHECK(type <= 2);
 		begin = reader.readBitsT<24>();
 		end = reader.readBitsT<24>();
 		partition_size = reader.readBitsT<24>() + 1;
@@ -770,7 +770,7 @@ struct OggReader {
 
 int main(int argc, const char* argv[]) {
 	OggReader reader;
-	OkOrError result = reader.full_read(argv[1]);
+	OkOrError result = reader.full_read((argc >= 2) ? argv[1] : "");
 	if(result.is_error_)
 		std::cerr << "error: " << result.err_msg_ << std::endl;
 	else
