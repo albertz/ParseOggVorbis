@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
+#include <assert.h>
 #include <string>
 #include <iostream>
 #ifdef __APPLE__
