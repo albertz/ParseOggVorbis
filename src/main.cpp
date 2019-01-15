@@ -226,6 +226,7 @@ struct VorbisFloor0 {
 
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
 		CHECK(false); // not implemented. but rarely used anyway?
+		(void) reader; (void) codebooks; (void) window_len; (void) out; // remove warnings
 		return OkOrError();
 	}
 };
@@ -280,6 +281,7 @@ struct VorbisFloor1 {
 	}
 
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
+		(void) window_len; // not used
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
