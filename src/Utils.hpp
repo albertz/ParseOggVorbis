@@ -114,10 +114,11 @@ inline void endian_swap(uint64_t& x) {
 #if BYTE_ORDER == LITTLE_ENDIAN
 #define endian_swap_to_big_endian(x) endian_swap_generic(x)
 #define endian_swap_to_little_endian(x)
-#endif
-#if BYTE_ORDER == BIG_ENDIAN
+#elif BYTE_ORDER == BIG_ENDIAN
 #define endian_swap_to_big_endian(x)
 #define endian_swap_to_little_endian(x) endian_swap_generic(x)
+#else
+#error unknown byte order
 #endif
 
 
