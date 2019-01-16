@@ -107,21 +107,68 @@ struct __attribute__((packed)) VorbisIdHeader {
 
 
 struct VorbisCodebook { // used in VorbisStreamSetup
-	uint16_t dimensions;
-	uint32_t num_entries;
-	bool ordered;
-	bool sparse;
-	// Entries:
-	// [i] : lens (0 = unused), [i] codeword?, num? TODO
-	std::vector<uint8_t> codeword_lengths; // 0 is unused
-	uint8_t lookup_type;
-	double minimum_value;
-	double delta_value;
-	uint8_t value_bits;
-	bool sequence_p;
-	uint32_t num_lookup_values;
-	std::vector<uint32_t> multiplicands;
+	uint16_t dimensions_;
+	uint32_t num_entries_;
+	bool ordered_;
+	bool sparse_;
+	struct Entry {
+		uint32_t num_; // number of used entry
+		uint8_t len_; // bitlen of codeword
+		uint8_t codeword_;
+		Entry() : num_(0), len_(0), codeword_(0) {}
+		void init(uint32_t num, uint8_t len) {
+			num_ = num; len_ = len;
+			assert(len >= 1 && len <= 32); // reader.readBitsT<5>() + 1
+		}
+		bool unused() const { return len_ == 0; }
+	};
+	std::vector<Entry> entries_;
+	uint8_t lookup_type_;
+	double minimum_value_;
+	double delta_value_;
+	uint8_t value_bits_;
+	bool sequence_p_;
+	uint32_t num_lookup_values_;
+	std::vector<uint32_t> multiplicands_;
 	
+	OkOrError _assignCodewords() {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1 Huffman decision tree repr
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
+		uint32_t marker[32]; // for each bitlen (len - 1)
+		memset(marker, 0, sizeof(marker));
+		for(Entry& entry : entries_) {
+			if(entry.unused()) continue;
+			assert(entry.len_ >= 1 && entry.len_ <= 32);
+			uint32_t codeword = marker[entry.len_ - 1];
+			CHECK((codeword >> entry.len_) == 0); // overspecified
+			entry.codeword_ = codeword;
+			for(uint8_t j = entry.len_; j > 0; --j) {
+				if(marker[j - 1] & 1) {
+					if(j == 1) {
+						++marker[0];
+					} else {
+						marker[j - 1] = marker[j - 2] << 1;
+					}
+					CHECK(marker[j - 1] <= (uint32_t(1) << j)); // overspecified
+					break;
+				}
+				++marker[j - 1];
+			}
+			for(uint8_t j = entry.len_ + 1; j <= 32; ++j) {
+				if((marker[j - 1] >> 1) == codeword) {
+					codeword = marker[j - 1];
+					marker[j - 1] = marker[j - 2] << 1;
+				}
+				else
+					break;
+			}
+		}
+		for(uint8_t i = 0; i < 31; ++i)
+			CHECK(marker[i] == (uint32_t(1) << (i + 1))); // underspecified
+		CHECK(marker[31] == 0); // underspecified
+		return OkOrError();
+	}
+
 	OkOrError parse(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
@@ -131,70 +178,72 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		// https://github.com/Samulus/hz/blob/master/src/lib/vorbis.d
 		// https://github.com/latelee/my_live555/blob/master/liveMedia/OggFileParser.cpp
 		CHECK(reader.readBitsT<24>() == 0x564342); // sync pattern
-		dimensions = reader.readBitsT<16>();
-		CHECK(dimensions > 0);
-		num_entries = reader.readBitsT<24>();
-		CHECK(num_entries > 0);
-		codeword_lengths.resize(num_entries);
-		ordered = reader.readBitsT<1>();
+		dimensions_ = reader.readBitsT<16>();
+		CHECK(dimensions_ > 0);
+		num_entries_ = reader.readBitsT<24>();
+		CHECK(num_entries_ > 0);
+		entries_.resize(num_entries_);
+		ordered_ = reader.readBitsT<1>();
 		
-		if(!ordered) {
-			sparse = reader.readBitsT<1>();
-			if(sparse) {
-				for(uint32_t i = 0; i < num_entries; ++i) {
+		if(!ordered_) {
+			sparse_ = reader.readBitsT<1>();
+			if(sparse_) {
+				uint32_t cur_entry_num = 0;
+				for(uint32_t i = 0; i < num_entries_; ++i) {
 					bool flag = reader.readBitsT<1>();
-					if(flag)
-						codeword_lengths[i] = reader.readBitsT<5>() + 1;
-					else
-						codeword_lengths[i] = 0; // unused
+					if(flag) {
+						entries_[i].init(cur_entry_num, reader.readBitsT<5>() + 1);
+						++cur_entry_num;
+					}
 				}
 			}
 			else { // not sparse
-				for(uint32_t i = 0; i < num_entries; ++i)
-					codeword_lengths[i] = reader.readBitsT<5>() + 1;
+				for(uint32_t i = 0; i < num_entries_; ++i)
+					entries_[i].init(i, reader.readBitsT<5>() + 1);
 			}
 		}
 		else { // ordered flag is set
-			sparse = false; // not used
-			for(uint32_t cur_entry = 0; cur_entry < num_entries;) {
+			sparse_ = false; // not used
+			for(uint32_t cur_entry_num = 0; cur_entry_num < num_entries_;) {
 				uint8_t cur_len = reader.readBitsT<5>() + 1;
-				uint32_t number = reader.readBits<uint32_t>(highest_bit(num_entries - cur_entry));
-				for(uint32_t i = cur_entry; i < cur_entry + number; ++i)
-					codeword_lengths[i] = cur_len;
-				cur_entry += number;
+				uint32_t number = reader.readBits<uint32_t>(highest_bit(num_entries_ - cur_entry_num));
+				for(uint32_t i = cur_entry_num; i < cur_entry_num + number; ++i)
+					entries_[i].init(i, cur_len);
+				cur_entry_num += number;
 				++cur_len;
-				CHECK(cur_entry <= num_entries);
+				CHECK(cur_entry_num <= num_entries_);
 			}
 		}
-		
-		lookup_type = reader.readBitsT<4>();
-		CHECK(lookup_type == 0 || lookup_type == 1 || lookup_type == 2);
-		if(lookup_type == 0) {
+		CHECK_ERR(_assignCodewords());
+
+		lookup_type_ = reader.readBitsT<4>();
+		CHECK(lookup_type_ == 0 || lookup_type_ == 1 || lookup_type_ == 2);
+		if(lookup_type_ == 0) {
 			// not used
-			minimum_value = 0; delta_value = 0;
-			value_bits = 0; sequence_p = false;
-			num_lookup_values = 0;
+			minimum_value_ = 0; delta_value_ = 0;
+			value_bits_ = 0; sequence_p_ = false;
+			num_lookup_values_ = 0;
 		}
-		else if(lookup_type == 1 || lookup_type == 2) {
-			minimum_value = float32_unpack(reader.readBitsT<32>());
-			delta_value = float32_unpack(reader.readBitsT<32>());
-			value_bits = reader.readBitsT<4>() + 1;
-			sequence_p = reader.readBitsT<1>();
-			if(lookup_type == 1) {
+		else if(lookup_type_ == 1 || lookup_type_ == 2) {
+			minimum_value_ = float32_unpack(reader.readBitsT<32>());
+			delta_value_ = float32_unpack(reader.readBitsT<32>());
+			value_bits_ = reader.readBitsT<4>() + 1;
+			sequence_p_ = reader.readBitsT<1>();
+			if(lookup_type_ == 1) {
 				// lookup1_values:
 				// the greatest integer value for which [num_lookup_values] to the power of [codebook_dimensions] is less than or equal to [codebook_entries]’.
-				num_lookup_values = 0;
-				while(powIntExp(num_lookup_values + 1, dimensions) <= num_entries)
-					++num_lookup_values;
+				num_lookup_values_ = 0;
+				while(powIntExp(num_lookup_values_ + 1, dimensions_) <= num_entries_)
+					++num_lookup_values_;
 			}
 			else
-				num_lookup_values = num_entries * dimensions;
+				num_lookup_values_ = num_entries_ * dimensions_;
 		}
 		else
 			assert(false);
-		multiplicands.resize(num_lookup_values);
-		for(uint32_t i = 0; i < num_lookup_values; ++i)
-			multiplicands[i] = reader.readBits<uint32_t>(value_bits);
+		multiplicands_.resize(num_lookup_values_);
+		for(uint32_t i = 0; i < num_lookup_values_; ++i)
+			multiplicands_[i] = reader.readBits<uint32_t>(value_bits_);
 		
 		CHECK(!reader.reachedEnd());
 		return OkOrError();
