@@ -252,12 +252,16 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	int decodeScalar(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
-		// TODO
-		assert(false);
+		// TODO could be optimized by codeword lookup tree
 		uint32_t word = 0;
 		for(uint8_t len = 0; len < 32; ++len) {
-			
-			//for(uint8_t codeword_lengths );
+			if(len > 0)
+				for(Entry& entry : entries_) {
+					if(entry.unused()) continue;
+					if(entry.len_ == len && entry.codeword_ == word)
+						return entry.num_;
+				}
+			word = (word << 1) | reader.readBitsT<1>();
 		}
 		return -1;
 	}
@@ -684,8 +688,6 @@ struct VorbisStreamInfo {
 			VorbisFloor& floor = setup.floors[floor_number];
 			DataRange<float> out;
 			CHECK_ERR(floor.decode(reader, setup.codebooks, (int)window.size(), out));
-			// TODO floor decode
-			assert(false);
 		}
 		
 		// Residues.
