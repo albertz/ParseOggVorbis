@@ -253,6 +253,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
 		// TODO
+		assert(false);
 		uint32_t word = 0;
 		for(uint8_t len = 0; len < 32; ++len) {
 			
@@ -380,6 +381,7 @@ struct VorbisFloor1 {
 			}
 		}
 		// TODO amplitude value synthesis, compute curve
+		assert(false);
 		return OkOrError();
 	}
 };
@@ -683,10 +685,12 @@ struct VorbisStreamInfo {
 			DataRange<float> out;
 			CHECK_ERR(floor.decode(reader, setup.codebooks, (int)window.size(), out));
 			// TODO floor decode
+			assert(false);
 		}
 		
 		// Residues.
 		// TODO residue decode
+		assert(false);
 		
 		return OkOrError();
 	}
