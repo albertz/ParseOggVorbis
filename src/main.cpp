@@ -263,6 +263,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				}
 			word = (word << 1) | reader.readBitsT<1>();
 		}
+		assert(false); // TODO not found? too long? assert maybe also not good idea...
 		return -1;
 	}
 };
