@@ -23,6 +23,8 @@
 #error BYTE_ORDER not defined
 #endif
 
+// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+// Some of the reference functions (9.2) of Vorbis are here.
 
 uint32_t update_crc(uint32_t crc, uint8_t* buffer, int size);
 
@@ -40,8 +42,9 @@ struct OkOrError {
 #define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
 #define ASSERT_ERR(v) do { OkOrError res = (v); if(res.is_error_) { std::cerr << "assertion failed, has error: " << res.err_msg_ << std::endl; } assert(!res.is_error_); } while(0)
 
+// 9.2.1. ilog
 template<typename T>
-inline int highest_bit(T v) { // ilog in Vorbis documentation
+inline int highest_bit(T v) {
 	assert(v >= 0);
 	int ret = 0;
 	while(v) {
@@ -51,6 +54,16 @@ inline int highest_bit(T v) { // ilog in Vorbis documentation
 	return ret;
 }
 
+// 9.2.4. low_neighbor
+// ”low_neighbor(v,x)” finds the position n in vector [v] of the greatest value scalar element for which n is less than [x] and vector [v] element n is less than vector [v] element [x].
+
+// 9.2.5. high_neighbor
+// ”high_neighbor(v,x)” finds the position n in vector [v] of the lowest value scalar element for which n is less than [x] and vector [v] element n is greater than vector [v] element [x].
+
+// 9.2.6. render_point
+// ”render_point(x0,y0,x1,y1,X)” is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
+
+
 /* 32 bit float (not IEEE; nonnormalized mantissa +
  biased exponent) : neeeeeee eeemmmmm mmmmmmmm mmmmmmmm
  Vorbis ref code: Why not IEEE?  It's just not that important here. */
@@ -59,6 +72,7 @@ static constexpr int VQ_FEXP = 10;
 static constexpr int VQ_FMAN = 21;
 static constexpr int VQ_FEXP_BIAS = 768;
 
+// 9.2.2. float32_unpack
 inline double float32_unpack(uint32_t v) {
 	double mant = v & 0x1fffff;
 	bool sign = v & 0x80000000;

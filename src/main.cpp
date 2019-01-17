@@ -263,7 +263,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				}
 			word = (word << 1) | reader.readBitsT<1>();
 		}
-		assert(false); // TODO not found? too long? assert maybe also not good idea...
+		assert(false); // should not be possible, because we checked in _assignCodewords that we are fully specified
 		return -1;
 	}
 };
@@ -292,6 +292,7 @@ struct VorbisFloor0 {
 	}
 
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
+        // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 6.2.2
 		CHECK(false); // not implemented. but rarely used anyway?
 		(void) reader; (void) codebooks; (void) window_len; (void) out; // remove warnings
 		return OkOrError();
@@ -349,15 +350,16 @@ struct VorbisFloor1 {
 
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
 		(void) window_len; // not used
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 7.2.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
-		if(reader.readBitsT<1>() == 0) {
-			out = DataRange<float>(); // nothing
+		if(reader.readBitsT<1>() == 0) { // 7.2.3
+			out = DataRange<float>(); // nothing, no audio. this is valid
 			return OkOrError();
 		}
-		// Decode Y values
-		typedef uint32_t y_t; // best type?
+        
+		// Decode Y values (7.2.3)
+		typedef uint32_t y_t;
 		std::vector<y_t> ys;
 		{
 			int range;
@@ -385,6 +387,19 @@ struct VorbisFloor1 {
 				}
 			}
 		}
+
+		// Compute curves (7.2.4).
+		// Step 1: Amplitude value synthesis (7.2.4).
+		std::vector<bool> step2_flag;
+		step2_flag.resize(xs.size());
+		step2_flag[0] = true;
+		step2_flag[1] = true;
+
+		std::vector<y_t> final_ys;
+		final_ys.resize(xs.size());
+		final_ys[0] = ys[0];
+		final_ys[1] = ys[1];
+
 		// TODO amplitude value synthesis, compute curve
 		assert(false);
 		return OkOrError();
@@ -409,6 +424,7 @@ struct VorbisFloor {
 	}
 	
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
+        // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
 		if(floor_type == 0)
 			return floor0.decode(reader, codebooks, window_len, out);
 		if(floor_type == 1)
@@ -665,7 +681,7 @@ struct VorbisStreamInfo {
 	VorbisStreamInfo() : packet_counts_(0) {}
 	
 	OkOrError parse_audio(BitReader& reader) {
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
 		CHECK(reader.readBitsT<1>() == 0);
@@ -674,7 +690,7 @@ struct VorbisStreamInfo {
 		VorbisModeNumber& mode = setup.modes[mode_idx];
 		VorbisMapping& mapping = setup.mappings[mode.mapping];
 		
-		// Get window.
+		// Get window. (4.3.1)
 		bool prev_window_flag = false, next_window_flag = false;
 		if(mode.block_flag) {
 			prev_window_flag = reader.readBitsT<1>();
@@ -682,7 +698,7 @@ struct VorbisStreamInfo {
 		}
 		DataRange<float> window = mode.getWindow(prev_window_flag, next_window_flag);
 		
-		// Floor curves.
+		// Floor curves. (4.3.2)
 		for(int channel = 0; channel < header.audio_channels; ++channel) {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
