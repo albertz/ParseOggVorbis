@@ -55,14 +55,80 @@ inline int highest_bit(T v) {
 }
 
 // 9.2.4. low_neighbor
-// ”low_neighbor(v,x)” finds the position n in vector [v] of the greatest value scalar element for which n is less than [x] and vector [v] element n is less than vector [v] element [x].
+// low_neighbor(vec,idx) finds the position n in vector [vec] of the greatest value scalar element for which n is less than [idx] and vector [vec] element n is less than vector [vec] element [idx].
+template<typename T>
+inline size_t low_neighbor(const std::vector<T>& vec, size_t idx) {
+	assert(idx >= 1); assert(!vec.empty()); assert(idx < vec.size());
+	T val = vec[idx];
+	size_t best_idx;
+	T best_val;
+	size_t cur_idx = 0;
+	// find first valid, assign best_idx/best_val
+	while(true) {
+		if(cur_idx >= idx)
+			return size_t(-1);
+		if(vec[cur_idx] < val) {
+			best_idx = cur_idx;
+			best_val = vec[cur_idx];
+			++cur_idx;
+			break;
+		}
+		++cur_idx;
+	}
+	// now find really the best
+	for(; cur_idx < idx; ++cur_idx) {
+		if(vec[cur_idx] < val && vec[cur_idx] > best_val) {
+			best_idx = cur_idx;
+			best_val = vec[cur_idx];
+		}
+	}
+	return best_idx;
+}
 
 // 9.2.5. high_neighbor
-// ”high_neighbor(v,x)” finds the position n in vector [v] of the lowest value scalar element for which n is less than [x] and vector [v] element n is greater than vector [v] element [x].
+// high_neighbor(vec,idx) finds the position n in vector [vec] of the lowest value scalar element for which n is less than [idx] and vector [vec] element n is greater than vector [vec] element [idx].
+template<typename T>
+inline size_t high_neighbor(const std::vector<T>& vec, size_t idx) {
+	assert(idx >= 1); assert(!vec.empty()); assert(idx < vec.size());
+	T val = vec[idx];
+	size_t best_idx;
+	T best_val;
+	size_t cur_idx = 0;
+	// find first valid, assign best_idx/best_val
+	while(true) {
+		if(cur_idx >= idx)
+			return size_t(-1);
+		if(vec[cur_idx] > val) {
+			best_idx = cur_idx;
+			best_val = vec[cur_idx];
+			++cur_idx;
+			break;
+		}
+		++cur_idx;
+	}
+	// now find really the best
+	for(; cur_idx < idx; ++cur_idx) {
+		if(vec[cur_idx] > val && vec[cur_idx] < best_val) {
+			best_idx = cur_idx;
+			best_val = vec[cur_idx];
+		}
+	}
+	return best_idx;
+}
 
 // 9.2.6. render_point
-// ”render_point(x0,y0,x1,y1,X)” is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
-
+// ender_point(x0,y0,x1,y1,X) is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
+template<typename T>
+inline T render_point(T x0, T y0, T x1, T y1, T X) {
+	T dy = y1 - y0;
+	T adx = x1 - x0;
+	T ady = abs(dy);
+	T err = ady * (X - x0);
+	T off = err / adx;
+	if(dy < 0)
+		return y0 - off;
+	return y0 + off;
+}
 
 /* 32 bit float (not IEEE; nonnormalized mantissa +
  biased exponent) : neeeeeee eeemmmmm mmmmmmmm mmmmmmmm
