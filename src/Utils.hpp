@@ -117,13 +117,14 @@ inline size_t high_neighbor(const std::vector<T>& vec, size_t idx) {
 }
 
 // 9.2.6. render_point
-// ender_point(x0,y0,x1,y1,X) is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
+// render_point(x0,y0,x1,y1,X) is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
 template<typename T>
 inline T render_point(T x0, T y0, T x1, T y1, T X) {
 	assert(x0 < x1);
 	assert(x0 <= X && X <= x1);
 	T adx = x1 - x0;
 	assert(adx > 0);
+	// written in a way that T can be an unsigned type
 	bool dy_positive = y1 >= y0;
 	T ady = dy_positive ? (y1 - y0) : (y0 - y1);
 	T err = ady * (X - x0);
@@ -132,6 +133,45 @@ inline T render_point(T x0, T y0, T x1, T y1, T X) {
 		return y0 + off;
 	else
 		return y0 - off;
+}
+
+// 9.2.7. render_line
+template<typename T>
+inline void render_line(size_t x0, T y0, size_t x1, T y1, std::vector<T>& vec) {
+	assert(x0 < x1);
+	size_t abs_dx = x1 - x0;
+	// written in a way that T can be an unsigned type
+	bool dy_positive = y1 >= y0;
+	T abs_dy = dy_positive ? (y1 - y0) : (y0 - y1);
+	T abs_base = abs_dy / abs_dx;
+	T abs_err = 0;
+	T abs_sy = abs_base + 1;
+	assert(abs_dy >= abs_base * abs_dx);
+	abs_dy -= abs_base * abs_dx;
+	T y = y0;
+	vec[x0] = y0;
+	for(size_t x = x0 + 1; x < x1; ++x) {
+		abs_err += abs_dy;
+		if(abs_err >= abs_dx) {
+			abs_err -= abs_dx;
+			if(dy_positive)
+				y += abs_sy;
+			else
+				y -= abs_sy;
+		}
+		else {
+			if(dy_positive)
+				y += abs_base;
+			else
+				y -= abs_base;
+		}
+		vec[x] = y;
+	}
+	if(dy_positive) {
+		assert(y0 <= y); assert(y <= y1);
+	} else {
+		assert(y0 >= y); assert(y >= y1);
+	}
 }
 
 /* 32 bit float (not IEEE; nonnormalized mantissa +
