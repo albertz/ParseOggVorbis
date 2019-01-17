@@ -349,7 +349,7 @@ struct VorbisFloor1 {
 
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
 		(void) window_len; // not used
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
 		if(reader.readBitsT<1>() == 0) {
