@@ -357,19 +357,20 @@ struct VorbisFloor1 {
 			out = DataRange<float>(); // nothing, no audio. this is valid
 			return OkOrError();
 		}
-        
-		// Decode Y values (7.2.3)
+
 		typedef uint32_t y_t;
+		y_t range;
+		switch(multiplier) {
+			case 1: range = 256; break;
+			case 2: range = 128; break;
+			case 3: range = 86; break;
+			case 4: range = 64; break;
+			default: assert(false);
+		}
+
+		// Decode Y values (7.2.3)
 		std::vector<y_t> ys;
 		{
-			int range;
-			switch(multiplier) {
-				case 1: range = 256; break;
-				case 2: range = 128; break;
-				case 3: range = 86; break;
-				case 4: range = 64; break;
-				default: assert(false);
-			}
 			ys.push_back(reader.readBits<y_t>(highest_bit(range - 1)));
 			ys.push_back(reader.readBits<y_t>(highest_bit(range - 1)));
 			for(uint8_t class_idx : partition_classes) {
@@ -394,13 +395,41 @@ struct VorbisFloor1 {
 		step2_flag.resize(xs.size());
 		step2_flag[0] = true;
 		step2_flag[1] = true;
-
 		std::vector<y_t> final_ys;
 		final_ys.resize(xs.size());
 		final_ys[0] = ys[0];
 		final_ys[1] = ys[1];
+		for(size_t i = 2; i < xs.size(); ++i) {
+			size_t low_idx = low_neighbor(xs, i);
+			size_t high_idx = high_neighbor(xs, i);
+			y_t predicted = render_point(xs[low_idx], final_ys[low_idx], xs[high_idx], final_ys[high_idx], xs[i]);
+			y_t val = ys[i];
+			y_t high_room = range - predicted;
+			y_t low_room = predicted;
+			y_t room = (high_room < low_room) ? (high_room * 2) : (low_room * 2);
+			if(val == 0) {
+				step2_flag[i] = false;
+				final_ys[i] = predicted;
+			} else {
+				step2_flag[low_idx] = true;
+				step2_flag[high_idx] = true;
+				step2_flag[i] = true;
+				if(val >= room) {
+					if(high_room > low_room)
+						final_ys[i] = val - low_room + predicted;
+					else
+						final_ys[i] = predicted - val + high_room - 1;
+				} else {
+					if(val % 2 == 1)
+						final_ys[i] = predicted - (val + 1) / 2;
+					else
+						final_ys[i] = predicted + val / 2;
+				}
+			}
+		}
 
-		// TODO amplitude value synthesis, compute curve
+		// Step 2: curve synthesis (7.2.4)
+		// TODO...
 		assert(false);
 		return OkOrError();
 	}

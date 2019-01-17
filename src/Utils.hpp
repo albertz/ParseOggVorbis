@@ -120,14 +120,18 @@ inline size_t high_neighbor(const std::vector<T>& vec, size_t idx) {
 // ender_point(x0,y0,x1,y1,X) is used to find the Y value at point X along the line specified by x0, x1, y0 and y1. This function uses an integer algorithm to solve for the point directly without calculating intervening values along the line.
 template<typename T>
 inline T render_point(T x0, T y0, T x1, T y1, T X) {
-	T dy = y1 - y0;
+	assert(x0 < x1);
+	assert(x0 <= X && X <= x1);
 	T adx = x1 - x0;
-	T ady = abs(dy);
+	assert(adx > 0);
+	bool dy_positive = y1 >= y0;
+	T ady = dy_positive ? (y1 - y0) : (y0 - y1);
 	T err = ady * (X - x0);
 	T off = err / adx;
-	if(dy < 0)
+	if(dy_positive)
+		return y0 + off;
+	else
 		return y0 - off;
-	return y0 + off;
 }
 
 /* 32 bit float (not IEEE; nonnormalized mantissa +
