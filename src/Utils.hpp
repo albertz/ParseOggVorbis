@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <string>
 #include <iostream>
+#include <vector>
 #ifdef __APPLE__
 #include <machine/endian.h>
 #endif

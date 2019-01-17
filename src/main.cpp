@@ -404,9 +404,10 @@ struct VorbisFloor1 {
 			size_t high_idx = high_neighbor(xs, i);
 			y_t predicted = render_point(xs[low_idx], final_ys[low_idx], xs[high_idx], final_ys[high_idx], xs[i]);
 			y_t val = ys[i];
+			assert(predicted <= range);
 			y_t high_room = range - predicted;
 			y_t low_room = predicted;
-			y_t room = (high_room < low_room) ? (high_room * 2) : (low_room * 2);
+			y_t room = std::min(high_room, low_room) * 2;
 			if(val == 0) {
 				step2_flag[i] = false;
 				final_ys[i] = predicted;
