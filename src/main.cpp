@@ -142,7 +142,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		memset(marker, 0, sizeof(marker));
 		for(Entry& entry : entries_) {
 			if(entry.unused()) continue;
-			assert(entry.len_ >= 1 && entry.len_ <= 32);
+			CHECK(entry.len_ >= 1 && entry.len_ <= 32);
 			uint32_t codeword = marker[entry.len_ - 1];
 			CHECK((codeword >> entry.len_) == 0); // overspecified
 			entry.codeword_ = codeword;
@@ -281,8 +281,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 			else
 				num_lookup_values_ = num_entries_ * dimensions_;
 		}
-		else
-			assert(false);
+		else CHECK(false); // invalid type
 		multiplicands_.resize(num_lookup_values_);
 		for(uint32_t i = 0; i < num_lookup_values_; ++i)
 			multiplicands_[i] = reader.readBits<uint32_t>(value_bits_);
@@ -421,6 +420,7 @@ struct VorbisFloor1 {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 7.2.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
+		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisFloor.cs
 		if(reader.readBitsT<1>() == 0) { // 7.2.3
 			use_output = false; // nothing, no audio. this is valid
 			return OkOrError();
@@ -434,7 +434,7 @@ struct VorbisFloor1 {
 			case 2: range = 128; break;
 			case 3: range = 86; break;
 			case 4: range = 64; break;
-			default: assert(false);
+			default: CHECK(false); // invalid multiplier
 		}
 
 		// Decode Y values (7.2.3)
@@ -473,7 +473,7 @@ struct VorbisFloor1 {
 			size_t high_idx = high_neighbor(xs, i);
 			y_t predicted = render_point(xs[low_idx], final_ys[low_idx], xs[high_idx], final_ys[high_idx], xs[i]);
 			y_t val = ys[i];
-			assert(predicted <= range);
+			CHECK(predicted <= range);
 			y_t high_room = range - predicted;
 			y_t low_room = predicted;
 			y_t room = std::min(high_room, low_room) * 2;
@@ -521,7 +521,7 @@ struct VorbisFloor1 {
 		if(hx < out.size())
 			render_line(hx, hy, out.size(), hy, floor);
 		for(uint16_t i = 0; i < out.size(); ++i) {
-			assert(floor[i] < 256); // inverse_db_table len
+			CHECK(floor[i] < 256); // inverse_db_table len
 			out[i] = inverse_db_table[floor[i]];
 		}
 		return OkOrError();
@@ -535,23 +535,23 @@ struct VorbisFloor {
 	
 	OkOrError parse(BitReader& reader, int num_codebooks) {
 		floor_type = reader.readBitsT<16>();
-		CHECK(floor_type == 0 || floor_type == 1);
 		if(floor_type == 0)
 			CHECK_ERR(floor0.parse(reader, num_codebooks));
 		else if(floor_type == 1)
 			CHECK_ERR(floor1.parse(reader));
 		else
-			assert(false);
+			CHECK(false); // invalid floor type
 		return OkOrError();
 	}
 	
 	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
         // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
 		if(floor_type == 0)
-			return floor0.decode(reader, codebooks, out, use_output);
-		if(floor_type == 1)
-			return floor1.decode(reader, codebooks, out, use_output);
-		assert(false);
+			CHECK_ERR(floor0.decode(reader, codebooks, out, use_output));
+		else if(floor_type == 1)
+			CHECK_ERR(floor1.decode(reader, codebooks, out, use_output));
+		else
+			CHECK(false); // invalid floor type
 		return OkOrError();
 	}
 };
@@ -615,12 +615,12 @@ struct VorbisResidue {
 		// Allow to overwrite type, because type==2 reduces to type=1.
 		if(type < 0)
 			type = this->type;
-		assert(type >= 0 && type <= 2);
-		assert(num_channel > 0);
-		assert(channel_used.size() == num_channel);
-		assert(out.size() == num_channel);
+		CHECK(type >= 0 && type <= 2);
+		CHECK(num_channel > 0);
+		CHECK(channel_used.size() == num_channel);
+		CHECK(out.size() == num_channel);
 		for(uint8_t i = 0; i < num_channel; ++i)
-			assert(out[i].size() == decode_len);
+			CHECK(out[i].size() == decode_len);
 		if(type == 2) {
 			std::vector<std::vector<float>> tmp_out(1);
 			tmp_out[0].resize(num_channel * decode_len, 0);
@@ -631,12 +631,12 @@ struct VorbisResidue {
 					out[j][i] = tmp_out[0][i + num_channel * j];
 			return OkOrError();
 		}
-		assert(type == 0 || type == 1);
+		CHECK(type == 0 || type == 1);
 		// incorrect in documentation, we want to limit by decode_len, thus min
 		uint32_t limit_begin = std::min(begin, decode_len);
 		uint32_t limit_end = std::min(end, decode_len);
-		assert(limit_begin <= limit_end);
-		assert(classbook < codebooks.size());
+		CHECK(limit_begin <= limit_end);
+		CHECK(classbook < codebooks.size());
 		VorbisCodebook& class_codebook = codebooks[classbook];
 		uint16_t classwords_per_codeword = class_codebook.dimensions_;
 		uint32_t n_to_read = limit_end - limit_begin;
@@ -689,7 +689,7 @@ struct VorbisResidue {
 											v[offset + k] += temp[l];
 									}
 								}
-								else assert(false); // invalid type
+								else CHECK(false); // invalid type
 							}
 						}
 						++partition_count;
@@ -710,7 +710,7 @@ struct VorbisMapping {
 	std::vector<Submap> submaps;
 	
 	OkOrError parse(BitReader& reader, int num_channels, int num_floors, int num_residues) {
-		assert(num_channels > 0);
+		CHECK(num_channels > 0);
 		int bits = highest_bit(num_channels - 1);
 		type = reader.readBitsT<16>();
 		CHECK(type == 0);
@@ -911,7 +911,7 @@ struct VorbisStreamInfo {
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
 		CHECK(reader.readBitsT<1>() == 0);
-		assert(setup.modes.size() > 0);
+		CHECK(setup.modes.size() > 0);
 		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
 		VorbisModeNumber& mode = setup.modes[mode_idx];
 		VorbisMapping& mapping = setup.mappings[mode.mapping];
@@ -923,7 +923,7 @@ struct VorbisStreamInfo {
 			next_window_flag = reader.readBitsT<1>();
 		}
 		DataRange<float> window = mode.getWindow(prev_window_flag, next_window_flag);
-		assert((window.size() >> 16) == 0); // window size should fit in uint16_t
+		CHECK((window.size() >> 16) == 0); // window size should fit in uint16_t
 		std::vector<float> floor_outputs(window.size() * header.audio_channels);
 		std::vector<bool> floor_output_used(header.audio_channels);
 
@@ -948,10 +948,10 @@ struct VorbisStreamInfo {
 
 		// Residues. (4.3.4)
 		std::vector<std::vector<float>> residue_outputs(header.audio_channels);
-		std::vector<bool> channel_used(header.audio_channels);
 		for(size_t i = 0; i < mapping.submaps.size(); ++i) {
 			VorbisMapping::Submap& submap = mapping.submaps[i];
 			uint8_t num_channel_per_submap = 0;
+			std::vector<bool> channel_used(header.audio_channels);
 			for(uint8_t j = 0; j < header.audio_channels; ++j) {
 				if(mapping.muxs[j] == i) {
 					channel_used[num_channel_per_submap] = floor_output_used[j];
@@ -959,7 +959,7 @@ struct VorbisStreamInfo {
 				}
 			}
 			VorbisResidue& residue = setup.residues[submap.residue];
-			uint32_t decode_len = residue.getDecodeLen(window.size());
+			uint32_t decode_len = residue.getDecodeLen((uint32_t) window.size());
 			std::vector<std::vector<float>> out(num_channel_per_submap);
 			for(uint8_t j = 0; j < num_channel_per_submap; ++j)
 				out[j].resize(decode_len, 0);
@@ -967,7 +967,7 @@ struct VorbisStreamInfo {
 			num_channel_per_submap = 0;
 			for(uint8_t j = 0; j < header.audio_channels; ++j) {
 				if(mapping.muxs[j] == i) {
-					assert(out[num_channel_per_submap].size() == decode_len);
+					CHECK(out[num_channel_per_submap].size() == decode_len);
 					residue_outputs[j].swap(out[num_channel_per_submap]);
 					++num_channel_per_submap;
 				}
@@ -975,10 +975,53 @@ struct VorbisStreamInfo {
 		}
 
 		// 4.3.5. inverse coupling
+		for(size_t i = mapping.couplings.size(); i > 0; --i) {
+			VorbisMapping::Coupling& coupling = mapping.couplings[i];
+			std::vector<float>& magnitude_vector = residue_outputs[coupling.magintude];
+			std::vector<float>& angle_vector = residue_outputs[coupling.angle];
+			CHECK(magnitude_vector.size() == angle_vector.size());
+			for(size_t j = 0; j < magnitude_vector.size(); ++j) {
+				float mag_val = magnitude_vector[j];
+				float ang_val = angle_vector[j];
+				float mag_val_new = mag_val, ang_val_new = ang_val;
+				if(mag_val > 0) {
+					if(ang_val > 0) {
+						ang_val_new = mag_val - ang_val;
+					} else {
+						ang_val_new = mag_val;
+						mag_val_new = mag_val + ang_val;
+					}
+				} else {
+					if(ang_val > 0) {
+						ang_val_new = mag_val + ang_val;
+					} else {
+						ang_val_new = mag_val;
+						mag_val_new = mag_val - ang_val;
+					}
+				}
+				magnitude_vector[j] = mag_val_new;
+				angle_vector[j] = ang_val_new;
+			}
+		}
+
 		// 4.3.6. dot product
+		// operate inplace on the residue_data.
+		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
+			if(floor_output_used[channel]) {
+				DataRange<float> floor_data(&floor_outputs[window.size() * channel], window.size());
+				DataRange<float> residue_data(residue_outputs[channel]);
+				CHECK(floor_data.size() >= window.size() / 2);
+				CHECK(residue_data.size() >= window.size() / 2);
+				for(size_t i = 0; i < window.size() / 2; ++i)
+					residue_data[i] *= floor_data[i];
+			}
+			else
+				residue_outputs[channel].clear();
+		}
+
 		// 4.3.7. inverse MDCT
 		// TODO...
-		assert(false);
+		//CHECK(false);
 		
 		return OkOrError();
 	}
@@ -1112,7 +1155,7 @@ struct OggReader {
 				len = 0;
 			}
 		}
-		assert(len == 0 && offset == buffer_page_.data_len);
+		CHECK(len == 0 && offset == buffer_page_.data_len);
 		
 		if(buffer_page_.header.header_type_flag & HeaderFlag_Last) {
 			streams_.erase(buffer_page_.header.stream_serial_num);

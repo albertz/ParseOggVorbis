@@ -430,6 +430,7 @@ struct DataRange {
 	
 	DataRange() : data_(nullptr), size_(0) {}
 	DataRange(T* data, size_t size) : data_(data), size_(size) {}
+	DataRange(std::vector<float>& vec) : data_(&vec[0]), size_(vec.size()) {}
 	T& operator[](size_t i) {
 		assert(data_);
 		assert(i >= 0 && i < size_);
