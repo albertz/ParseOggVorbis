@@ -116,8 +116,8 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	bool sparse_;
 	struct Entry {
 		uint32_t num_; // number of used entry
-		uint8_t len_; // bitlen of codeword
-		uint8_t codeword_; // calculated via _assignCodewords()
+		uint8_t len_; // bitlen of codeword. if used, 1 <= len_ <= 32.
+		uint32_t codeword_; // calculated via _assignCodewords()
 		Entry() : num_(0), len_(0), codeword_(0) {}
 		void init(uint32_t num, uint8_t len) {
 			num_ = num; len_ = len;
@@ -243,15 +243,17 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		}
 		else { // ordered flag is set
 			sparse_ = false; // not used
-			for(uint32_t cur_entry_num = 0; cur_entry_num < num_entries_;) {
-				uint8_t cur_len = reader.readBitsT<5>() + 1;
+			uint8_t cur_len = reader.readBitsT<5>() + 1;
+			uint32_t cur_entry_num = 0;
+			for(; cur_entry_num < num_entries_;) {
 				uint32_t number = reader.readBits<uint32_t>(highest_bit(num_entries_ - cur_entry_num));
 				for(uint32_t i = cur_entry_num; i < cur_entry_num + number; ++i)
 					entries_[i].init(i, cur_len);
 				cur_entry_num += number;
-				++cur_len;
 				CHECK(cur_entry_num <= num_entries_);
+				++cur_len;
 			}
+			CHECK(cur_entry_num == num_entries_);
 		}
 		CHECK_ERR(_assignCodewords());
 
@@ -971,7 +973,11 @@ struct VorbisStreamInfo {
 				}
 			}
 		}
-		// TODO residue decode
+
+		// 4.3.5. inverse coupling
+		// 4.3.6. dot product
+		// 4.3.7. inverse MDCT
+		// TODO...
 		assert(false);
 		
 		return OkOrError();
