@@ -16,3 +16,6 @@ CMakeLists.txt.user
 *.kdev4
 
 /audio-examples
+
+.DS_Store
+
