@@ -11,11 +11,13 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
 #include "Utils.hpp"
+#include "inverse_db_table.h"
 
 
 // Documentation:
@@ -100,8 +102,9 @@ struct __attribute__((packed)) VorbisIdHeader {
 	uint32_t bitrate_nominal;
 	uint32_t bitrate_minimum;
 	uint8_t blocksizes_exp;
-	int get_blocksize_0() const { return int(1) << (blocksizes_exp & 0x0f); }
-	int get_blocksize_1() const { return int(1) << ((blocksizes_exp & 0xf0) >> 4); }
+	// range of blocksize_0|1 is [1,...,2^15] (both inclusive)
+	uint16_t get_blocksize_0() const { return uint16_t(1) << (blocksizes_exp & 0x0f); }
+	uint16_t get_blocksize_1() const { return uint16_t(1) << ((blocksizes_exp & 0xf0) >> 4); }
 	uint8_t framing_flag;
 };
 
@@ -291,10 +294,10 @@ struct VorbisFloor0 {
 		return OkOrError();
 	}
 
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
+	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
         // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 6.2.2
 		CHECK(false); // not implemented. but rarely used anyway?
-		(void) reader; (void) codebooks; (void) window_len; (void) out; // remove warnings
+		(void) reader; (void) codebooks; (void) out; (void) use_output; // remove warnings
 		return OkOrError();
 	}
 };
@@ -311,7 +314,10 @@ struct VorbisFloor1 {
 	std::vector<uint8_t> partition_classes;
 	std::vector<VorbisFloorClass> classes;
 	uint8_t multiplier;
-	std::vector<uint32_t> xs;
+	typedef uint32_t x_t;
+	std::vector<x_t> xs;
+	std::vector<size_t> xs_sorted_idx;
+	std::vector<x_t> xs_sorted;
 	
 	OkOrError parse(BitReader& reader) {
 		int num_partitions = reader.readBitsT<5>();
@@ -343,20 +349,33 @@ struct VorbisFloor1 {
 			CHECK(class_idx < classes.size());
 			VorbisFloorClass& cl = classes[class_idx];
 			for(int j = 0; j < cl.dimensions; ++j)
-				xs.push_back(reader.readBits<uint32_t>(rangebits));
+				xs.push_back(reader.readBits<x_t>(rangebits));
 		}
+
+		// need sorted xs later in decode
+		xs_sorted_idx.resize(xs.size());
+		for(size_t i = 0; i < xs.size(); ++i)
+			xs_sorted_idx[i] = i;
+		std::sort(
+			xs_sorted_idx.begin(), xs_sorted_idx.end(),
+			[&](const size_t& a, const size_t& b) {
+				return xs[a] < xs[b];
+			});
+		xs_sorted.resize(xs.size());
+		for(size_t i = 0; i < xs.size(); ++i)
+			xs_sorted[i] = xs[xs_sorted_idx[i]];
 		return OkOrError();
 	}
 
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
-		(void) window_len; // not used
+	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 7.2.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
 		if(reader.readBitsT<1>() == 0) { // 7.2.3
-			out = DataRange<float>(); // nothing, no audio. this is valid
+			use_output = false; // nothing, no audio. this is valid
 			return OkOrError();
 		}
+		use_output = true;
 
 		typedef uint32_t y_t;
 		y_t range;
@@ -430,8 +449,31 @@ struct VorbisFloor1 {
 		}
 
 		// Step 2: curve synthesis (7.2.4)
-		// TODO...
-		assert(false);
+		// Need sorted xs, final_ys, step2_flag, ascending by the values in xs.
+		// We have prepared xs_sorted_idx for that.
+		std::vector<y_t> final_ys_sorted(xs.size());
+		std::vector<bool> step2_flag_sorted(xs.size());
+		for(size_t i = 0; i < xs.size(); ++i)
+			final_ys_sorted[i] = final_ys[xs_sorted_idx[i]];
+		for(size_t i = 0; i < xs.size(); ++i)
+			step2_flag_sorted[i] = step2_flag[xs_sorted_idx[i]];
+		x_t lx = 0, hx = 0;
+		y_t ly = final_ys_sorted[0] * multiplier, hy = 0;
+		std::vector<y_t> floor(out.size());
+		for(size_t i = 1; i < xs.size(); ++i) {
+			if(step2_flag_sorted[i]) {
+				hx = xs_sorted[i];
+				hy = final_ys_sorted[i] * multiplier;
+				render_line(lx, ly, hx, hy, floor);
+				lx = hx; ly = hy;
+			}
+		}
+		if(hx < out.size())
+			render_line(hx, hy, out.size(), hy, floor);
+		for(uint16_t i = 0; i < out.size(); ++i) {
+			assert(floor[i] < 256); // inverse_db_table len
+			out[i] = inverse_db_table[floor[i]];
+		}
 		return OkOrError();
 	}
 };
@@ -453,12 +495,12 @@ struct VorbisFloor {
 		return OkOrError();
 	}
 	
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, int window_len, DataRange<float>& out) {
+	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
         // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
 		if(floor_type == 0)
-			return floor0.decode(reader, codebooks, window_len, out);
+			return floor0.decode(reader, codebooks, out, use_output);
 		if(floor_type == 1)
-			return floor1.decode(reader, codebooks, window_len, out);
+			return floor1.decode(reader, codebooks, out, use_output);
 		assert(false);
 		return OkOrError();
 	}
@@ -562,7 +604,7 @@ struct VorbisModeNumber { // used in VorbisStreamSetup
 	uint16_t transform_type;
 	uint8_t mapping;
 	// precalculated
-	int blocksize;
+	uint16_t blocksize;
 	std::vector<float> windows;
 	
 	OkOrError parse(BitReader& reader, int num_mappings, VorbisIdHeader& header) {
@@ -578,18 +620,18 @@ struct VorbisModeNumber { // used in VorbisStreamSetup
 	}
 	
 	OkOrError precalc(VorbisIdHeader& header) {
-		int blocksize0 = header.get_blocksize_0();
-		int blocksize1 = header.get_blocksize_1();
+		uint16_t blocksize0 = header.get_blocksize_0();
+		uint16_t blocksize1 = header.get_blocksize_1();
 		blocksize = block_flag ? blocksize1 : blocksize0;
 		windows.resize(block_flag ? (blocksize * 4) : blocksize);
 		for(int win_idx = 0; win_idx < (block_flag ? 4 : 1); ++win_idx) {
 			DataRange<float> window = _getWindow(win_idx);
 			bool prev = win_idx & 1;
 			bool next = win_idx & 2;
-			int left = (prev ? blocksize1 : blocksize0) / 2;
-			int right = (next ? blocksize1 : blocksize0) / 2;
-			int left_begin = blocksize / 4 - left / 2;
-			int right_begin = blocksize - blocksize / 4 - right / 2;
+			uint16_t left = (prev ? blocksize1 : blocksize0) / 2;
+			uint16_t right = (next ? blocksize1 : blocksize0) / 2;
+			uint16_t left_begin = blocksize / 4 - left / 2;
+			uint16_t right_begin = blocksize - blocksize / 4 - right / 2;
 			for(int i = 0; i < left; ++i) {
 				float x = sinf(M_PI_2 * (i + 0.5) / left);
 				x *= x;
@@ -727,14 +769,19 @@ struct VorbisStreamInfo {
 			next_window_flag = reader.readBitsT<1>();
 		}
 		DataRange<float> window = mode.getWindow(prev_window_flag, next_window_flag);
-		
+		assert((window.size() >> 16) == 0); // window size should fit in uint16_t
+		std::vector<float> floor_outputs(window.size() * header.audio_channels);
+		std::vector<bool> floor_output_used(header.audio_channels);
+
 		// Floor curves. (4.3.2)
-		for(int channel = 0; channel < header.audio_channels; ++channel) {
+		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
 			VorbisFloor& floor = setup.floors[floor_number];
-			DataRange<float> out;
-			CHECK_ERR(floor.decode(reader, setup.codebooks, (int)window.size(), out));
+			DataRange<float> out(&floor_outputs[window.size() * channel], window.size());
+			bool use_output = false;
+			CHECK_ERR(floor.decode(reader, setup.codebooks, out, use_output));
+			floor_output_used[channel] = use_output;
 		}
 		
 		// Residues.

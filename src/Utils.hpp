@@ -137,9 +137,14 @@ inline T render_point(T x0, T y0, T x1, T y1, T X) {
 }
 
 // 9.2.7. render_line
+// Assigns vec[x] = y for x in [x0,x1-1], where y is interpolated.
+// We expect vec to be resized beforehand.
+// We allow some x to be outside of the valid range, and will just skip them.
 template<typename T>
 inline void render_line(size_t x0, T y0, size_t x1, T y1, std::vector<T>& vec) {
 	assert(x0 < x1);
+	if(x0 >= vec.size())
+		return;
 	size_t abs_dx = x1 - x0;
 	// written in a way that T can be an unsigned type
 	bool dy_positive = y1 >= y0;
@@ -152,6 +157,8 @@ inline void render_line(size_t x0, T y0, size_t x1, T y1, std::vector<T>& vec) {
 	T y = y0;
 	vec[x0] = y0;
 	for(size_t x = x0 + 1; x < x1; ++x) {
+		if(x >= vec.size())
+			break;
 		abs_err += abs_dy;
 		if(abs_err >= abs_dx) {
 			abs_err -= abs_dx;
