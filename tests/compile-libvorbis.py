@@ -3,6 +3,7 @@
 import os
 import sys
 from subprocess import check_call
+import argparse
 
 import better_exchook
 better_exchook.install()
@@ -44,9 +45,28 @@ vorbis_c_files = [
     # vorbisfile extra
     "vorbisfile.c"
 ]
-cmd = ["cc"]
-cmd += ["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir]
-cmd += ["%s/src/%s" % (libogg_dir, fn) for fn in ogg_c_files]
-cmd += ["%s/lib/%s" % (libvorbis_dir, fn) for fn in vorbis_c_files]
-cmd += ["libvorbis-demo.c"]
-check_call(cmd)
+
+
+def compile_direct():
+    cmd = ["cc"]
+    cmd += ["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir]
+    cmd += ["%s/src/%s" % (libogg_dir, fn) for fn in ogg_c_files]
+    cmd += ["%s/lib/%s" % (libvorbis_dir, fn) for fn in vorbis_c_files]
+    cmd += ["libvorbis-demo.c"]
+    check_call(cmd)
+
+
+def main():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("--mode", required=True, help="direct or copy")
+    args = argparser.parse_args()
+    if args.mode == "direct":
+        compile_direct()
+    elif args.mode == "copy":
+        raise NotImplementedError
+    else:
+        raise Exception("invalid mode %r" % args.mode)
+
+
+if __name__ == "__main__":
+    main()
