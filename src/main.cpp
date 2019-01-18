@@ -29,7 +29,7 @@
 // Python Vorbis code: https://github.com/susimus/ogg_vorbis/
 // D Vorbis code: https://github.com/Samulus/hz/blob/master/src/lib/vorbis.d
 // C++ Vorbis code: https://github.com/latelee/my_live555/blob/master/liveMedia/OggFileParser.cpp
-
+// Java Vorbis code: https://github.com/kazutomi/xiphqt/blob/master/rhea/src/com/meviatronic/zeus/castor/VorbisDecoder.java
 
 
 // Page + page header is described here:
@@ -117,7 +117,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	struct Entry {
 		uint32_t num_; // number of used entry
 		uint8_t len_; // bitlen of codeword
-		uint8_t codeword_;
+		uint8_t codeword_; // calculated via _assignCodewords()
 		Entry() : num_(0), len_(0), codeword_(0) {}
 		void init(uint32_t num, uint8_t len) {
 			num_ = num; len_ = len;
@@ -133,6 +133,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	bool sequence_p_;
 	uint32_t num_lookup_values_;
 	std::vector<uint32_t> multiplicands_;
+	std::vector<float> lookup_table_; // calculated via _buildVQ(). size: flat num_entries_, dimensions_
 	
 	OkOrError _assignCodewords() {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1 Huffman decision tree repr
@@ -170,6 +171,41 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 			CHECK(marker[i] == (uint32_t(1) << (i + 1))); // underspecified
 		CHECK(marker[31] == 0); // underspecified
 		return OkOrError();
+	}
+
+	void _buildVQ() {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1 VQ lookup table vector representation
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
+		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisCodebook.cs
+		if(lookup_type_ == 0) return;
+		lookup_table_.resize(num_entries_ * dimensions_);
+		if(lookup_type_ == 1) {
+			for(uint32_t entry_idx = 0; entry_idx < num_entries_; ++entry_idx) {
+				double last = 0;
+				uint32_t index_divisor = 1;
+				for(uint16_t dim = 0; dim < dimensions_; ++dim) {
+					uint32_t mult_offset = (entry_idx / index_divisor) % multiplicands_.size();
+					lookup_table_[entry_idx * dimensions_ + dim] = multiplicands_[mult_offset] * delta_value_ + minimum_value_ + last;
+					if(sequence_p_)
+						last = lookup_table_[entry_idx * dimensions_ + dim];
+					index_divisor *= multiplicands_.size();
+				}
+			}
+		}
+		else if(lookup_type_ == 2) {
+			assert(lookup_table_.size() == multiplicands_.size());
+			uint32_t offset = 0; // idx both for lookup_table_ and multiplicands_
+			for(uint32_t entry_idx = 0; entry_idx < num_entries_; ++entry_idx) {
+				double last = 0;
+				for(uint16_t dim = 0; dim < dimensions_; ++dim) {
+					lookup_table_[offset] = multiplicands_[offset] * delta_value_ + minimum_value_ + last;
+					if(sequence_p_)
+						last = lookup_table_[offset];
+					++offset;
+				}
+			}
+		}
+		else assert(false); // invalid lookup_type_
 	}
 
 	OkOrError parse(BitReader& reader) {
@@ -219,6 +255,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		}
 		CHECK_ERR(_assignCodewords());
 
+		// VQ lookup table vector representation
 		lookup_type_ = reader.readBitsT<4>();
 		CHECK(lookup_type_ == 0 || lookup_type_ == 1 || lookup_type_ == 2);
 		if(lookup_type_ == 0) {
@@ -247,12 +284,13 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		multiplicands_.resize(num_lookup_values_);
 		for(uint32_t i = 0; i < num_lookup_values_; ++i)
 			multiplicands_[i] = reader.readBits<uint32_t>(value_bits_);
-		
+		_buildVQ();
+
 		CHECK(!reader.reachedEnd());
 		return OkOrError();
 	}
-	
-	int decodeScalar(BitReader& reader) {
+
+	uint32_t decodeScalar(BitReader& reader) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
 		// TODO could be optimized by codeword lookup tree
@@ -267,7 +305,17 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 			word = (word << 1) | reader.readBitsT<1>();
 		}
 		assert(false); // should not be possible, because we checked in _assignCodewords that we are fully specified
-		return -1;
+		return uint32_t(-1);
+	}
+
+	// Returns vector of size dimensions_, or empty if invalid.
+	DataRange<float> decodeVector(BitReader& reader) {
+		uint32_t idx = decodeScalar(reader);
+		if(lookup_type_ == 0) return DataRange<float>(); // actually this is invalid
+		if(idx >= num_entries_) return DataRange<float>(); // invalid idx
+		uint32_t offset = idx * dimensions_;
+		assert(offset + dimensions_ <= lookup_table_.size());
+		return DataRange<float>(&lookup_table_[offset], dimensions_);
 	}
 };
 
@@ -513,13 +561,16 @@ struct VorbisResidue {
 	uint8_t num_classifications;
 	uint8_t classbook;
 	std::vector<uint32_t> cascades;
-	std::vector<uint8_t> books;
+	typedef uint8_t book_t;
+	std::vector<book_t> books;
 	
 	OkOrError parse(BitReader& reader) {
 		type = reader.readBitsT<16>();
 		CHECK(type <= 2);
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 8.6.1. header decode
 		begin = reader.readBitsT<24>();
 		end = reader.readBitsT<24>();
+		CHECK(begin <= end);
 		partition_size = reader.readBitsT<24>() + 1;
 		num_classifications = reader.readBitsT<6>() + 1;
 		classbook = reader.readBitsT<8>();
@@ -539,10 +590,111 @@ struct VorbisResidue {
 				if(cascades[i] & (uint32_t(1) << j))
 					books[i * 8 + j] = reader.readBitsT<8>();
 				else
-					books[i * 8 + j] = -1; // TODO: good placeholder?
+					books[i * 8 + j] = book_t(-1);
 			}
 		}
 		
+		return OkOrError();
+	}
+
+	uint32_t getDecodeLen(uint32_t window_len) const {
+		uint32_t decode_len = window_len / 2;
+		if(type == 2)
+			decode_len *= 2;
+		return decode_len;
+	}
+
+	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, uint8_t num_channel, const std::vector<bool>& channel_used, uint32_t decode_len, std::vector<std::vector<float>>& out, int type=-1) {
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.4. residue decode
+		// 8.6.2. packet decode
+		// https://github.com/runningwild/gorbis/blob/master/vorbis/residue.go
+		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisResidue.cs
+		// actual_size = decode_len = window_len / 2 = blocksize / 2.
+		// Allow to overwrite type, because type==2 reduces to type=1.
+		if(type < 0)
+			type = this->type;
+		assert(type >= 0 && type <= 2);
+		assert(num_channel > 0);
+		assert(channel_used.size() == num_channel);
+		assert(out.size() == num_channel);
+		for(uint8_t i = 0; i < num_channel; ++i)
+			assert(out[i].size() == decode_len);
+		if(type == 2) {
+			std::vector<std::vector<float>> tmp_out(1);
+			tmp_out[0].resize(num_channel * decode_len, 0);
+			std::vector<bool> tmp_channel_used{true};
+			CHECK_ERR(decode(reader, codebooks, 1, tmp_channel_used, num_channel * decode_len, tmp_out, 1));
+			for(uint8_t j = 0; j < num_channel; ++j)
+				for(uint32_t i = 0; i < decode_len; ++i)
+					out[j][i] = tmp_out[0][i + num_channel * j];
+			return OkOrError();
+		}
+		assert(type == 0 || type == 1);
+		// incorrect in documentation, we want to limit by decode_len, thus min
+		uint32_t limit_begin = std::min(begin, decode_len);
+		uint32_t limit_end = std::min(end, decode_len);
+		assert(limit_begin <= limit_end);
+		assert(classbook < codebooks.size());
+		VorbisCodebook& class_codebook = codebooks[classbook];
+		uint16_t classwords_per_codeword = class_codebook.dimensions_;
+		uint32_t n_to_read = limit_end - limit_begin;
+		if(n_to_read == 0)
+			return OkOrError();
+		uint32_t partitions_to_read = n_to_read / partition_size;
+
+		uint32_t classification_count_per_channel = partitions_to_read + classwords_per_codeword;
+		typedef uint8_t classification_t;
+		std::vector<classification_t> classifications(num_channel * classification_count_per_channel);
+		for(uint8_t pass = 0; pass < 8; ++pass) {
+			uint32_t partition_count = 0;
+			while(partition_count < partitions_to_read) {
+				if(pass == 0) {
+					for(uint8_t j = 0; j < num_channel; ++j) {
+						if(channel_used[j]) {
+							uint32_t temp = class_codebook.decodeScalar(reader);
+							for(uint16_t i = classwords_per_codeword; i > 0; --i) {
+								classifications[j * classification_count_per_channel + i - 1 + partition_count] = temp % num_classifications;
+								temp /= num_classifications;
+							}
+						}
+					}
+				}
+				for(uint16_t i = 0; i < classwords_per_codeword && partition_count < partitions_to_read; ++i) {
+					for(uint8_t j = 0; j < num_channel; ++j) {
+						if(channel_used[j]) {
+							classification_t vq_class = classifications[j * classification_count_per_channel + partition_count];
+							uint8_t vq_book = books[uint16_t(vq_class) * 8 + pass];
+							if(vq_book != book_t(-1)) {
+								VorbisCodebook& vq_codebook = codebooks[vq_book];
+								std::vector<float>& v = out[j];
+								uint32_t offset = limit_begin + partition_count * partition_size;
+								if(type == 0) {
+									// 8.6.3. format 0 specifics
+									uint32_t step = partition_size / vq_codebook.dimensions_;
+									for(uint32_t k = 0; k < step; ++k) {
+										DataRange<float> temp = vq_codebook.decodeVector(reader);
+										CHECK(temp.size() > 0); CHECK(temp.size() == vq_codebook.dimensions_);
+										for(uint16_t l = 0; l < vq_codebook.dimensions_; ++l)
+											v[offset + k + l * step] += temp[l];
+									}
+								}
+								else if(type == 1) {
+									// 8.6.4. format 1 specifics
+									for(uint32_t k = 0; k < partition_size;) {
+										DataRange<float> temp = vq_codebook.decodeVector(reader);
+										CHECK(temp.size() > 0); CHECK(temp.size() == vq_codebook.dimensions_);
+										for(uint32_t l = 0; l < vq_codebook.dimensions_; ++l, ++k)
+											v[offset + k] += temp[l];
+									}
+								}
+								else assert(false); // invalid type
+							}
+						}
+						++partition_count;
+					}
+				}
+			}
+		}
 		return OkOrError();
 	}
 };
@@ -551,7 +703,7 @@ struct VorbisMapping {
 	uint16_t type;
 	struct Coupling { int magintude, angle; };
 	std::vector<Coupling> couplings;
-	std::vector<uint8_t> muxs;
+	std::vector<uint8_t> muxs; // channel -> submap idx
 	struct Submap { uint8_t floor, residue; };
 	std::vector<Submap> submaps;
 	
@@ -784,7 +936,41 @@ struct VorbisStreamInfo {
 			floor_output_used[channel] = use_output;
 		}
 		
-		// Residues.
+		// 4.3.3. nonzero vector propagate
+		for(VorbisMapping::Coupling& coupling : mapping.couplings) {
+			if(!floor_output_used[coupling.angle] || !floor_output_used[coupling.magintude]) {
+				floor_output_used[coupling.angle] = false;
+				floor_output_used[coupling.magintude] = false;
+			}
+		}
+
+		// Residues. (4.3.4)
+		std::vector<std::vector<float>> residue_outputs(header.audio_channels);
+		std::vector<bool> channel_used(header.audio_channels);
+		for(size_t i = 0; i < mapping.submaps.size(); ++i) {
+			VorbisMapping::Submap& submap = mapping.submaps[i];
+			uint8_t num_channel_per_submap = 0;
+			for(uint8_t j = 0; j < header.audio_channels; ++j) {
+				if(mapping.muxs[j] == i) {
+					channel_used[num_channel_per_submap] = floor_output_used[j];
+					++num_channel_per_submap;
+				}
+			}
+			VorbisResidue& residue = setup.residues[submap.residue];
+			uint32_t decode_len = residue.getDecodeLen(window.size());
+			std::vector<std::vector<float>> out(num_channel_per_submap);
+			for(uint8_t j = 0; j < num_channel_per_submap; ++j)
+				out[j].resize(decode_len, 0);
+			CHECK_ERR(residue.decode(reader, setup.codebooks, num_channel_per_submap, channel_used, decode_len, out));
+			num_channel_per_submap = 0;
+			for(uint8_t j = 0; j < header.audio_channels; ++j) {
+				if(mapping.muxs[j] == i) {
+					assert(out[num_channel_per_submap].size() == decode_len);
+					residue_outputs[j].swap(out[num_channel_per_submap]);
+					++num_channel_per_submap;
+				}
+			}
+		}
 		// TODO residue decode
 		assert(false);
 		
