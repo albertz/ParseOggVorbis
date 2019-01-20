@@ -23,6 +23,7 @@
 #include <math.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
+#include <iostream>
 
 #ifdef _WIN32 /* We need the following two to set stdin/stdout to binary */
 #include <io.h>
@@ -31,35 +32,44 @@
 
 char pcmout[4096]; /* take 4k out of the data segment, not the stack */
 
-int main() {
+int main(int argc, const char** argv) {
 #ifdef _WIN32 /* We need to set stdin/stdout to binary mode. Damn windows. */
 	/* Beware the evil ifdef. We avoid these where we can, but this one we
 	 cannot. Don't add any more, you'll probably go to hell if you do. */
-	_setmode( _fileno(stdin), _O_BINARY );
-	_setmode( _fileno(stdout), _O_BINARY );
+	_setmode(_fileno(stdin), _O_BINARY);
+	_setmode(_fileno(stdout), _O_BINARY);
 #endif
 
+	const char* fn = (argc >= 2) ? argv[1] : "";
+	std::cout << "open file: " << fn << std::endl;
+	FILE* file = fopen(fn, "rb");
+	if(!file) {
+		std::cerr << "cannot open file" << std::endl;
+		return 1;
+	}
 	OggVorbis_File vf;
-	if(ov_open_callbacks(stdin, &vf, NULL, 0, OV_CALLBACKS_NOCLOSE) < 0) {
-		fprintf(stderr, "Input does not appear to be an Ogg bitstream.\n");
-		exit(1);
+	if(ov_open_callbacks(file, &vf, NULL, 0, OV_CALLBACKS_DEFAULT) < 0) {
+		std::cerr << "Input does not appear to be an Ogg bitstream." << std::endl;
+		return 1;
 	}
 
-	/* Throw the comments plus a few lines about the bitstream we're
-	 decoding */
+	/* Throw the comments plus a few lines about the bitstream we're decoding */
 	{
 		char **ptr = ov_comment(&vf, -1)->user_comments;
 		vorbis_info *vi = ov_info(&vf, -1);
 		while(*ptr) {
-			fprintf(stderr, "%s\n", *ptr);
+			std::cout << *ptr << std::endl;
 			++ptr;
 		}
-		fprintf(stderr, "\nBitstream is %d channel, %ldHz\n", vi->channels, vi->rate);
-		fprintf(stderr, "\nDecoded length: %ld samples\n",
-				(long)ov_pcm_total(&vf, -1));
-		fprintf(stderr, "Encoded by: %s\n\n", ov_comment(&vf, -1)->vendor);
+		std::cout
+		<< std::endl
+		<< "Bitstream is " << vi->channels << " channel, " << vi->rate << "Hz\n" << std::endl
+		<< "Decoded length: " << (long)ov_pcm_total(&vf, -1) << " samples" << std::endl
+		<< "Encoded by: " << ov_comment(&vf, -1)->vendor << std::endl
+		<< std::endl;
 	}
 
+	size_t sample_count = 0;
 	int eof = 0;
 	while(!eof) {
 		int current_section;
@@ -69,7 +79,7 @@ int main() {
 			eof = 1;
 		} else if(ret < 0) {
 			if(ret == OV_EBADLINK){
-				fprintf(stderr, "Corrupt bitstream section! Exiting.\n");
+				std::cerr << "Corrupt bitstream section! Exiting." << std::endl;
 				exit(1);
 			}
 
@@ -78,13 +88,15 @@ int main() {
 		} else {
 			/* we don't bother dealing with sample rate changes, etc, but
 			 you'll have to */
-			fwrite(pcmout, 1, ret, stdout);
+			//fwrite(pcmout, 1, ret, stdout);
+			sample_count += ret;
 		}
 	}
 
 	/* cleanup */
 	ov_clear(&vf);
 
-	fprintf(stderr, "Done.\n");
-	return(0);
+	std::cout << "Num samples: " << sample_count << std::endl;
+	std::cout << "Done." << std::endl;
+	return 0;
 }
