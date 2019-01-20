@@ -32,7 +32,7 @@
 		501898D721F4A4D300F1EF4D /* vorbis_mapping0.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898C421F4A4D200F1EF4D /* vorbis_mapping0.c */; };
 		501898D821F4A4D300F1EF4D /* vorbis_floor0.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898C521F4A4D200F1EF4D /* vorbis_floor0.c */; };
 		501898D921F4A4D300F1EF4D /* vorbis_synthesis.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898C621F4A4D200F1EF4D /* vorbis_synthesis.c */; };
-		501898F221F4A5E700F1EF4D /* libvorbis-demo.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898F121F4A5E700F1EF4D /* libvorbis-demo.c */; };
+		501898F221F4A5E700F1EF4D /* libvorbis-demo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -118,7 +118,7 @@
 		501898ED21F4A4F700F1EF4D /* os_types.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = os_types.h; sourceTree = "<group>"; };
 		501898EF21F4A4F700F1EF4D /* vorbisfile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = vorbisfile.h; sourceTree = "<group>"; };
 		501898F021F4A4F700F1EF4D /* codec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = codec.h; sourceTree = "<group>"; };
-		501898F121F4A5E700F1EF4D /* libvorbis-demo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "libvorbis-demo.c"; path = "tests/libvorbis-demo.c"; sourceTree = SOURCE_ROOT; };
+		501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "libvorbis-demo.cpp"; path = "tests/libvorbis-demo.cpp"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,7 +190,7 @@
 		501898A421F4A3F900F1EF4D /* libvorbis-standalone */ = {
 			isa = PBXGroup;
 			children = (
-				501898F121F4A5E700F1EF4D /* libvorbis-demo.c */,
+				501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */,
 				501898EB21F4A4F700F1EF4D /* ogg */,
 				501898EE21F4A4F700F1EF4D /* vorbis */,
 				501898B021F4A4C000F1EF4D /* ogg_bitwise.c */,
@@ -390,7 +390,7 @@
 				501898D021F4A4D300F1EF4D /* vorbis_window.c in Sources */,
 				501898CC21F4A4D300F1EF4D /* vorbis_info.c in Sources */,
 				501898D721F4A4D300F1EF4D /* vorbis_mapping0.c in Sources */,
-				501898F221F4A5E700F1EF4D /* libvorbis-demo.c in Sources */,
+				501898F221F4A5E700F1EF4D /* libvorbis-demo.cpp in Sources */,
 				501898CF21F4A4D300F1EF4D /* vorbis_res0.c in Sources */,
 				501898C821F4A4D300F1EF4D /* vorbis_registry.c in Sources */,
 			);
