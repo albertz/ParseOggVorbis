@@ -117,13 +117,11 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	bool ordered_;
 	bool sparse_;
 	struct Entry {
-		uint32_t idx_;
+		uint32_t idx_; // set in _assignCodewords()
 		uint32_t num_; // number of used entry
 		uint8_t len_; // bitlen of codeword. if used, 1 <= len_ <= 32.
 		uint32_t codeword_; // calculated via _assignCodewords()
-		uint32_t codeword_shifted_; // calculated via _assignCodewords()
-		uint32_t sorted_num_; // calculated via _assignCodewords()
-		Entry() : idx_(0), num_(0), len_(0), codeword_(0), codeword_shifted_(0), sorted_num_(0) {}
+		Entry() : idx_(0), num_(0), len_(0), codeword_(0) {}
 		void init(uint32_t num, uint8_t len) {
 			num_ = num; len_ = len;
 			assert(len >= 1 && len <= 32); // reader.readBitsT<5>() + 1
@@ -175,25 +173,8 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		for(uint8_t i = 0; i < 31; ++i)
 			CHECK(marker[i] == (uint32_t(1) << (i + 1))); // underspecified
 		CHECK(marker[31] == 0); // underspecified
-		// Need sorted indices, sorted by bitreversed codeword.
-		for(uint32_t i = 0; i < entries_.size(); ++i) {
+		for(uint32_t i = 0; i < entries_.size(); ++i)
 			entries_[i].idx_ = i;
-		}
-		std::vector<Entry*> sorted_entries;
-		sorted_entries.reserve(entries_.size());
-		for(Entry& entry : entries_) {
-			entry.codeword_shifted_ = entry.codeword_ << (32 - entry.len_);
-			sorted_entries.push_back(&entry);
-		}
-		std::sort(
-			sorted_entries.begin(), sorted_entries.end(),
-			[&](Entry* a, Entry* b) {
-				return a->codeword_shifted_ < b->codeword_shifted_;
-			});
-		for(uint32_t i = 0; i < sorted_entries.size(); ++i) {
-			Entry* entry = sorted_entries[i];
-			entry->sorted_num_ = i;
-		}
 		return OkOrError();
 	}
 
