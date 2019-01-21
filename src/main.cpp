@@ -234,10 +234,11 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				for(uint32_t i = 0; i < num_entries_; ++i) {
 					bool flag = reader.readBitsT<1>();
 					if(flag) {
-						entries_[i].init(i, cur_entry_num, reader.readBitsT<5>() + 1);
+						entries_[cur_entry_num].init(cur_entry_num, i, reader.readBitsT<5>() + 1);
 						++cur_entry_num;
 					}
 				}
+				entries_.resize(cur_entry_num);
 			}
 			else { // not sparse
 				for(uint32_t i = 0; i < num_entries_; ++i)
@@ -304,7 +305,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				for(Entry& entry : entries_) {
 					if(entry.unused()) continue;
 					if(entry.len_ == len && entry.codeword_ == word)
-						return entry.idx_;
+						return entry.num_;
 				}
 			word = (word << 1) | reader.readBitsT<1>();
 		}
