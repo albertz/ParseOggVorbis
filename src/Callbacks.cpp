@@ -8,6 +8,7 @@
 
 #include "Callbacks.h"
 #include <map>
+#include <set>
 #include <string>
 #include <iostream>
 
@@ -16,14 +17,20 @@ static int decoder_unique_idx = 1;
 struct Info {
 	int idx;
 	std::string name;
+	void* ref;
+	std::set<void*> aliases;
 	long sample_rate;
 	int num_channels;
-	Info() : idx(0), sample_rate(0), num_channels(0) {}
+	Info() : idx(0), ref(nullptr), sample_rate(0), num_channels(0) {}
 };
 
 std::map<void*, Info> decoders;
+std::map<void*, void*> decoder_alias_map;
 
 static Info& get_decoder(void* ref) {
+	auto alias_it = decoder_alias_map.find(ref);
+	if(alias_it != decoder_alias_map.end())
+		ref = alias_it->second;
 	auto it = decoders.find(ref);
 	assert(it != decoders.end());
 	return it->second;
@@ -36,13 +43,23 @@ extern "C" void register_decoder_ref(void* ref, const char* decoder_name, long s
 		info.idx = decoder_unique_idx;
 		++decoder_unique_idx;
 	}
+	info.ref = ref;
 	info.name = decoder_name;
 	info.sample_rate = sample_rate;
 	info.num_channels = num_channels;
 }
 
+extern "C" void register_decoder_alias(void* orig_ref, void* alias_ref) {
+	Info& info = get_decoder(orig_ref);
+	info.aliases.insert(alias_ref);
+	decoder_alias_map[alias_ref] = info.ref;
+}
+
 extern "C" void unregister_decoder_ref(void* ref) {
-	decoders.erase(ref);
+	Info& info = get_decoder(ref);
+	for(void* alias_ref : info.aliases)
+		decoder_alias_map.erase(alias_ref);
+	decoders.erase(info.ref); // warning: after this call, info becomes invalid
 }
 
 typedef float float32_t;

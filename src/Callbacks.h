@@ -24,6 +24,8 @@ extern "C" {
 // However, it is an error to call any of the other functions without calling this first.
 void register_decoder_ref(void* ref, const char* decoder_name, long sample_rate, int num_channels);
 void unregister_decoder_ref(void* ref);
+// Such that alias_ref is also a valid ref. orig_ref needs to be registered beforehand.
+void register_decoder_alias(void* orig_ref, void* alias_ref);
 
 // Name is any descriptive name.
 // Channel can be -1, if it does not apply.

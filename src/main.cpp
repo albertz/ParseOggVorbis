@@ -458,6 +458,7 @@ struct VorbisFloor1 {
 				}
 			}
 		}
+		push_data_u32(this, "floor1 ys", -1, &ys[0], ys.size());
 
 		// Compute curves (7.2.4).
 		// Step 1: Amplitude value synthesis (7.2.4).
@@ -1078,6 +1079,7 @@ struct VorbisPacket {
 		for(VorbisFloor& floor : stream->setup.floors) {
 			if(floor.floor_type == 1) {
 				VorbisFloor1& floor1 = floor.floor1;
+				register_decoder_alias(stream, &floor1);
 				push_data_u8(stream, "floor1 multiplier", -1, &floor1.multiplier, 1);
 				push_data_u32(stream, "floor1 xs", -1, &floor1.xs[0], floor1.xs.size());
 			}
