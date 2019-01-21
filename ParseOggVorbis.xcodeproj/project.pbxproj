@@ -33,6 +33,8 @@
 		501898D821F4A4D300F1EF4D /* vorbis_floor0.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898C521F4A4D200F1EF4D /* vorbis_floor0.c */; };
 		501898D921F4A4D300F1EF4D /* vorbis_synthesis.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898C621F4A4D200F1EF4D /* vorbis_synthesis.c */; };
 		501898F221F4A5E700F1EF4D /* libvorbis-demo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */; };
+		501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
+		501898F721F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -120,6 +122,8 @@
 		501898F021F4A4F700F1EF4D /* codec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = codec.h; sourceTree = "<group>"; };
 		501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "libvorbis-demo.cpp"; path = "tests/libvorbis-demo.cpp"; sourceTree = SOURCE_ROOT; };
 		501898F321F5B15D00F1EF4D /* inverse_db_table.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = inverse_db_table.h; sourceTree = "<group>"; };
+		501898F421F5B1C600F1EF4D /* Callbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Callbacks.h; sourceTree = "<group>"; };
+		501898F521F5C52E00F1EF4D /* Callbacks.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Callbacks.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +180,8 @@
 				23309B4321E6574400892406 /* Utils.hpp */,
 				23309B4421E6577F00892406 /* Utils.cpp */,
 				501898F321F5B15D00F1EF4D /* inverse_db_table.h */,
+				501898F421F5B1C600F1EF4D /* Callbacks.h */,
+				501898F521F5C52E00F1EF4D /* Callbacks.cpp */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -355,6 +361,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */,
 				23309B3B21E3AAA100892406 /* main.cpp in Sources */,
 				23309B4521E6577F00892406 /* Utils.cpp in Sources */,
 			);
@@ -379,6 +386,7 @@
 				501898C921F4A4D300F1EF4D /* vorbis_bitrate.c in Sources */,
 				501898D921F4A4D300F1EF4D /* vorbis_synthesis.c in Sources */,
 				501898C721F4A4D300F1EF4D /* vorbis_lpc.c in Sources */,
+				501898F721F5C52E00F1EF4D /* Callbacks.cpp in Sources */,
 				501898D521F4A4D300F1EF4D /* vorbis_block.c in Sources */,
 				501898CB21F4A4D300F1EF4D /* vorbis_vorbisfile.c in Sources */,
 				501898CD21F4A4D300F1EF4D /* vorbis_codebook.c in Sources */,
@@ -548,7 +556,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				HEADER_SEARCH_PATHS = "\"${SRCROOT}\"/tests/libvorbis-standalone";
+				HEADER_SEARCH_PATHS = (
+					"\"${SRCROOT}\"/tests/libvorbis-standalone",
+					"\"${SRCROOT}\"/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -557,7 +568,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				HEADER_SEARCH_PATHS = "\"${SRCROOT}\"/tests/libvorbis-standalone";
+				HEADER_SEARCH_PATHS = (
+					"\"${SRCROOT}\"/tests/libvorbis-standalone",
+					"\"${SRCROOT}\"/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
