@@ -130,3 +130,22 @@ extern "C" void push_data_int(void* ref, const char* name, int channel, const in
 	push_data_T(ref, name, channel, data, len);
 }
 
+extern "C" const char* generic_itoa(uint32_t val, int base, int len) {
+	assert(base >= 2);
+	if(len < 0)
+		len = sizeof(val) * 8;  // TODO this is just for base=2...
+	static char rep[] = "0123456789abcdef";
+	static char buf[33];
+	assert(len + 1 <= sizeof(buf));
+	char *ptr = &buf[sizeof(buf) - 1];
+	*ptr = '\0';
+	if(val == 0)
+		*--ptr = rep[val % base];
+	while(val != 0) {
+		*--ptr = rep[val % base];
+		val /= base;
+	}
+	while(ptr >= buf + sizeof(buf) - len)
+		*--ptr = '0';
+	return ptr;
+}

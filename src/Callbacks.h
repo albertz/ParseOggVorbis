@@ -11,6 +11,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,9 @@ void push_data_u32(void* ref, const char* name, int channel, const uint32_t* dat
 void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len);
 void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len);
 void push_data_int(void* ref, const char* name, int channel, const int* data, size_t len);
+
+// General utilities.
+const char* generic_itoa(uint32_t val, int base, int len);
 
 #if 0
 { // to keep Xcode happy
