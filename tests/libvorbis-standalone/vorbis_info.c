@@ -29,6 +29,7 @@
 #include "psy.h"
 #include "misc.h"
 #include "os.h"
+#include "Callbacks.h"
 
 #define GENERAL_VENDOR_STRING "Xiph.Org libVorbis 1.3.6"
 #define ENCODE_VENDOR_STRING "Xiph.Org libVorbis I 20180316 (Now 100% fewer shells)"
@@ -226,6 +227,7 @@ static int _vorbis_unpack_info(vorbis_info *vi,oggpack_buffer *opb){
 
   if(oggpack_read(opb,1)!=1)goto err_out; /* EOP check */
 
+  register_decoder_ref(vi, GENERAL_VENDOR_STRING, vi->rate, vi->channels);
   return(0);
  err_out:
   vorbis_info_clear(vi);

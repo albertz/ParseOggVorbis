@@ -24,6 +24,7 @@
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
 #include <iostream>
+#include "Callbacks.h"
 
 #ifdef _WIN32 /* We need the following two to set stdin/stdout to binary */
 #include <io.h>

@@ -26,6 +26,7 @@
 #include "registry.h"
 #include "psy.h"
 #include "misc.h"
+#include "Callbacks.h"
 
 /* simplistic, wasteful way of doing this (unique lookup for each
    mode/submapping); there should be a central repository for
@@ -785,6 +786,7 @@ static int mapping0_inverse(vorbis_block *vb,vorbis_info_mapping *l){
     _floor_P[ci->floor_type[info->floorsubmap[submap]]]->
       inverse2(vb,b->flr[info->floorsubmap[submap]],
                floormemo[i],pcm);
+    push_data_float(vi, "after_envelope", i, pcm, n / 2);
   }
 
   /* transform the PCM data; takes PCM vector, vb; modifies PCM vector */
@@ -792,6 +794,7 @@ static int mapping0_inverse(vorbis_block *vb,vorbis_info_mapping *l){
   for(i=0;i<vi->channels;i++){
     float *pcm=vb->pcm[i];
     mdct_backward(b->transform[vb->W][0],pcm,pcm);
+    push_data_float(vi, "pcm_after_mdct", i, pcm, n / 2);
   }
 
   /* all done! */

@@ -24,6 +24,7 @@
 #include "codebook.h"
 #include "misc.h"
 #include "scales.h"
+#include "Callbacks.h"
 
 #include <stdio.h>
 
@@ -170,6 +171,8 @@ static vorbis_info_floor *floor1_unpack (vorbis_info *vi,oggpack_buffer *opb){
       if(*sortpointer[j-1]==*sortpointer[j])goto err_out;
   }
 
+  push_data_int(vi, "floor1_unpack mult", -1, &info->mult, 1);
+  push_data_int(vi, "floor1_unpack postlist", -1, info->postlist, count + 2);
   return(info);
 
  err_out:
@@ -1032,6 +1035,7 @@ static void *floor1_inverse1(vorbis_block *vb,vorbis_look_floor *in){
 
     }
 
+    push_data_int(vb->vd->vi, "floormemo1", -1, fit_value, look->posts);
     return(fit_value);
   }
  eop:
