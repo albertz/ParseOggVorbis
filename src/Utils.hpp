@@ -253,23 +253,6 @@ inline void endian_swap(uint64_t& x) {
 #error unknown byte order
 #endif
 
-inline uint8_t bitreverse(uint8_t n) {
-	static const uint8_t lookup[16] = {
-		0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
-		0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
-	return (lookup[n & 0x0f] << 4) | lookup[n >> 4];
-}
-
-inline uint32_t bitreverse(uint32_t n) {
-	union { uint32_t u32v; uint8_t u8v[4]; } u;
-	u.u32v = n;
-	endian_swap(u.u32v);
-	u.u8v[0] = bitreverse(u.u8v[0]);
-	u.u8v[1] = bitreverse(u.u8v[1]);
-	u.u8v[2] = bitreverse(u.u8v[2]);
-	u.u8v[3] = bitreverse(u.u8v[3]);
-	return u.u32v;
-}
 
 struct IReader {
 	virtual ~IReader() {}
