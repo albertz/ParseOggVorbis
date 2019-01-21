@@ -30,6 +30,7 @@ void unregister_decoder_ref(void* ref);
 // data can be NULL, if no data. In that case, len is ignored.
 void push_data_float(void* ref, const char* name, int channel, const float* data, size_t len);
 void push_data_u32(void* ref, const char* name, int channel, const uint32_t* data, size_t len);
+void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len);
 void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len);
 void push_data_int(void* ref, const char* name, int channel, const int* data, size_t len);
 

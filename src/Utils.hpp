@@ -39,7 +39,7 @@ struct OkOrError {
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define CHECK(v) do { if(!(v)) { abort(); return OkOrError(__FILE__ ":" TOSTRING(__LINE__) ": check failed: " #v); } } while(0)
+#define CHECK(v) do { if(!(v)) { return OkOrError(__FILE__ ":" TOSTRING(__LINE__) ": check failed: " #v); } } while(0)
 #define CHECK_ERR(v) do { OkOrError res = (v); if(res.is_error_) return res; } while(0)
 #define ASSERT_ERR(v) do { OkOrError res = (v); if(res.is_error_) { std::cerr << "assertion failed, has error: " << res.err_msg_ << std::endl; } assert(!res.is_error_); } while(0)
 

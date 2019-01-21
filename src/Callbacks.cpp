@@ -50,6 +50,7 @@ typedef float float32_t;
 template<typename T>
 struct TypeInfoBase {
 	typedef T type;
+	typedef T num_type;
 };
 template<typename T> struct TypeInfo {};
 template<> struct TypeInfo<float32_t> : TypeInfoBase<float32_t> {
@@ -60,6 +61,10 @@ template<> struct TypeInfo<int32_t> : TypeInfoBase<int32_t> {
 };
 template<> struct TypeInfo<uint32_t> : TypeInfoBase<uint32_t> {
 	static constexpr const char* name = "u32";
+};
+template<> struct TypeInfo<uint8_t> : TypeInfoBase<uint8_t> {
+	static constexpr const char* name = "u8";
+	typedef int num_type;
 };
 
 template<typename T>
@@ -79,7 +84,7 @@ void push_data_short_stdout_T(void* ref, const char* name, int channel, const T*
 				break;
 			}
 			if(i > 0) std::cout << " ";
-			std::cout << data[i];
+			std::cout << (typename TypeInfo<T>::num_type) data[i];
 		}
 		std::cout << "} len=" << len;
 	}
@@ -96,6 +101,9 @@ extern "C" void push_data_float(void* ref, const char* name, int channel, const 
 	push_data_T(ref, name, channel, data, len);
 }
 extern "C" void push_data_u32(void* ref, const char* name, int channel, const uint32_t* data, size_t len) {
+	push_data_T(ref, name, channel, data, len);
+}
+extern "C" void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, len);
 }
 extern "C" void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len) {

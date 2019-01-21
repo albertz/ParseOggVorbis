@@ -18,6 +18,7 @@
 #include <math.h>
 #include "Utils.hpp"
 #include "inverse_db_table.h"
+#include "Callbacks.h"
 
 
 // Documentation:
@@ -936,6 +937,7 @@ struct VorbisStreamInfo {
 			bool use_output = false;
 			CHECK_ERR(floor.decode(reader, setup.codebooks, out, use_output));
 			floor_output_used[channel] = use_output;
+			push_data_float(this, "floor_outputs", channel, out.begin(), out.size());
 		}
 		
 		// 4.3.3. nonzero vector propagate
@@ -1014,6 +1016,7 @@ struct VorbisStreamInfo {
 				CHECK(residue_data.size() >= window.size() / 2);
 				for(size_t i = 0; i < window.size() / 2; ++i)
 					residue_data[i] *= floor_data[i];
+				push_data_float(this, "after_dot", channel, residue_data.begin(), residue_data.size());
 			}
 			else
 				residue_outputs[channel].clear();
@@ -1071,6 +1074,14 @@ struct VorbisPacket {
 		BitReader bitReader(&reader);
 		CHECK_ERR(stream->setup.parse(bitReader, stream->header));
 		CHECK(reader.reachedEnd());
+		register_decoder_ref(stream, "ParseOggVorbis", stream->header.audio_sample_rate, stream->header.audio_channels);
+		for(VorbisFloor& floor : stream->setup.floors) {
+			if(floor.floor_type == 1) {
+				VorbisFloor1& floor1 = floor.floor1;
+				push_data_u8(stream, "floor1 multiplier", -1, &floor1.multiplier, 1);
+				push_data_u32(stream, "floor1 xs", -1, &floor1.xs[0], floor1.xs.size());
+			}
+		}
 		return OkOrError();
 	}
 	
