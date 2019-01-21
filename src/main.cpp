@@ -122,8 +122,8 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		uint8_t len_; // bitlen of codeword. if used, 1 <= len_ <= 32.
 		uint32_t codeword_; // calculated via _assignCodewords()
 		Entry() : idx_(0), num_(0), len_(0), codeword_(0) {}
-		void init(uint32_t num, uint8_t len) {
-			num_ = num; len_ = len;
+		void init(uint32_t idx, uint32_t num, uint8_t len) {
+			idx_ = idx; num_ = num; len_ = len;
 			assert(len >= 1 && len <= 32); // reader.readBitsT<5>() + 1
 		}
 		bool unused() const { return len_ == 0; }
@@ -173,8 +173,6 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		for(uint8_t i = 0; i < 31; ++i)
 			CHECK(marker[i] == (uint32_t(1) << (i + 1))); // underspecified
 		CHECK(marker[31] == 0); // underspecified
-		for(uint32_t i = 0; i < entries_.size(); ++i)
-			entries_[i].idx_ = i;
 		return OkOrError();
 	}
 
@@ -236,14 +234,14 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 				for(uint32_t i = 0; i < num_entries_; ++i) {
 					bool flag = reader.readBitsT<1>();
 					if(flag) {
-						entries_[i].init(cur_entry_num, reader.readBitsT<5>() + 1);
+						entries_[i].init(i, cur_entry_num, reader.readBitsT<5>() + 1);
 						++cur_entry_num;
 					}
 				}
 			}
 			else { // not sparse
 				for(uint32_t i = 0; i < num_entries_; ++i)
-					entries_[i].init(i, reader.readBitsT<5>() + 1);
+					entries_[i].init(i, i, reader.readBitsT<5>() + 1);
 			}
 		}
 		else { // ordered flag is set
@@ -253,7 +251,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 			for(; cur_entry_num < num_entries_;) {
 				uint32_t number = reader.readBits<uint32_t>(highest_bit(num_entries_ - cur_entry_num));
 				for(uint32_t i = cur_entry_num; i < cur_entry_num + number; ++i)
-					entries_[i].init(i, cur_len);
+					entries_[i].init(i, i, cur_len);
 				cur_entry_num += number;
 				CHECK(cur_entry_num <= num_entries_);
 				++cur_len;
