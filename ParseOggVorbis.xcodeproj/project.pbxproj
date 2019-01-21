@@ -119,6 +119,7 @@
 		501898EF21F4A4F700F1EF4D /* vorbisfile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = vorbisfile.h; sourceTree = "<group>"; };
 		501898F021F4A4F700F1EF4D /* codec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = codec.h; sourceTree = "<group>"; };
 		501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "libvorbis-demo.cpp"; path = "tests/libvorbis-demo.cpp"; sourceTree = SOURCE_ROOT; };
+		501898F321F5B15D00F1EF4D /* inverse_db_table.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = inverse_db_table.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +175,7 @@
 				23309B4221E4FCEF00892406 /* crctable.h */,
 				23309B4321E6574400892406 /* Utils.hpp */,
 				23309B4421E6577F00892406 /* Utils.cpp */,
+				501898F321F5B15D00F1EF4D /* inverse_db_table.h */,
 			);
 			path = src;
 			sourceTree = "<group>";
