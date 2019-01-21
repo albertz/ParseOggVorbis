@@ -499,6 +499,7 @@ struct VorbisFloor1 {
 				}
 			}
 		}
+		push_data_u32(this, "floor1 final_ys", -1, &final_ys[0], final_ys.size());
 
 		// Step 2: curve synthesis (7.2.4)
 		// Need sorted xs, final_ys, step2_flag, ascending by the values in xs.
@@ -522,6 +523,7 @@ struct VorbisFloor1 {
 		}
 		if(hx < out.size())
 			render_line(hx, hy, out.size(), hy, floor);
+		push_data_u32(this, "floor1 floor", -1, &floor[0], floor.size());
 		for(uint16_t i = 0; i < out.size(); ++i) {
 			CHECK(floor[i] < 256); // inverse_db_table len
 			out[i] = inverse_db_table[floor[i]];

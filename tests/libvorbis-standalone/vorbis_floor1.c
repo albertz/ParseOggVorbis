@@ -997,6 +997,7 @@ static void *floor1_inverse1(vorbis_block *vb,vorbis_look_floor *in){
       }
       j+=cdim;
     }
+    push_data_int(vb->vd->vi, "floor1 fit_value decoded", -1, fit_value, look->posts);
 
     /* unwrap positive values and reconsitute via linear interpolation */
     for(i=2;i<look->posts;i++){
@@ -1035,7 +1036,7 @@ static void *floor1_inverse1(vorbis_block *vb,vorbis_look_floor *in){
 
     }
 
-    push_data_int(vb->vd->vi, "floormemo1", -1, fit_value, look->posts);
+    push_data_int(vb->vd->vi, "floor1 fit_value unwrapped", -1, fit_value, look->posts);
     return(fit_value);
   }
  eop:
