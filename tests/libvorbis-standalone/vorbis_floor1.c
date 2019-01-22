@@ -171,8 +171,8 @@ static vorbis_info_floor *floor1_unpack (vorbis_info *vi,oggpack_buffer *opb){
       if(*sortpointer[j-1]==*sortpointer[j])goto err_out;
   }
 
-  push_data_int(vi, "floor1_unpack mult", -1, &info->mult, 1);
-  push_data_int(vi, "floor1_unpack postlist", -1, info->postlist, count + 2);
+  push_data_int(vi, "floor1_unpack multiplier", -1, &info->mult, 1);
+  push_data_int(vi, "floor1_unpack xs", -1, info->postlist, count + 2);
   return(info);
 
  err_out:

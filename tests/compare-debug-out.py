@@ -3,6 +3,40 @@
 import argparse
 import struct
 import better_exchook
+import typing
+import tempfile
+import subprocess
+import os
+
+
+def create_debug_out(exec_path, ogg_filename):
+    """
+    :param str exec_path: either to libvorbis-standalone or our own tool (ParseOggVorbis)
+    :param str ogg_filename:
+    :return: debug out filename
+    :rtype: str
+    """
+    assert os.path.exists(exec_path)
+    assert os.path.exists(ogg_filename)
+    f = tempfile.NamedTemporaryFile()
+    debug_out_fn = f.name
+    f.close()
+    assert not os.path.exists(debug_out_fn)
+    cmd = [exec_path, "--in", ogg_filename, "--debug_out", debug_out_fn]
+    print("$ %s" % " ".join(cmd))
+    subprocess.check_call(cmd)
+    assert os.path.exists(debug_out_fn)
+    return debug_out_fn
+
+
+class Floor1:
+    def __init__(self, multiplier, xs):
+        """
+        :param int multiplier:
+        :param tuple[int] xs:
+        """
+        self.multiplier = multiplier
+        self.xs = xs
 
 
 class Reader:
@@ -17,6 +51,7 @@ class Reader:
         self.decoder_name = self.read_str_expect_key("decoder-name")
         self.decoder_sample_rate = self.read_single_int_expect_key("decoder-sample-rate")
         self.decoder_num_channels = self.read_single_int_expect_key("decoder-num-channels")
+        self.floors = []  # type: typing.List[Floor1]
 
     def raw_read(self, expect_size=None):
         """
@@ -120,29 +155,92 @@ class Reader:
         assert key == "entry-data"
         return name, channel, value
 
-
-def main():
-    better_exchook.install()
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--ourout", required=True)
-    arg_parser.add_argument("--libvorbisout")
-    args = arg_parser.parse_args()
-    our_reader = Reader(args.ourout)
-    print("Read ParseOggVorbis debug out file:", our_reader.filename)
-    print("Decoder name:", our_reader.decoder_name)
-    print("Num channels:", our_reader.decoder_num_channels)
-    print("Sample rate:", our_reader.decoder_sample_rate)
-    while True:
-        try:
-            name, channel, data = our_reader.read_entry()
-        except EOFError:
-            print("Reached EOF.")
-            break
+    def dump_entry(self, name, channel, data):
+        """
+        :param str name:
+        :param int|None channel:
+        :param tuple[float|int] data:
+        """
         if len(data) > 10:
             data_repr = repr(list(data[:10])) + "..."
         else:
             data_repr = repr(list(data))
-        print("Decoder name=%r channel=%r data=%s len=%i" % (name, channel, data_repr, len(data)))
+        print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
+
+    def read_setup(self, dump):
+        """
+        :param bool dump:
+        """
+        while True:
+            name, channel, data = self.read_entry()
+            if dump:
+                self.dump_entry(name, channel, data)
+            if name == "finish_setup":
+                break
+            assert name == "floor1_unpack multiplier"
+            multiplier, = data
+            assert isinstance(multiplier, int)
+            name, channel, xs = self.read_entry()
+            if dump:
+                self.dump_entry(name, channel, xs)
+            assert name == "floor1_unpack xs"
+            assert len(xs) > 0
+            assert isinstance(xs[0], int)
+            self.floors.append(Floor1(multiplier=multiplier, xs=xs))
+
+
+def main():
+    better_exchook.install()
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("--ogg")
+    arg_parser.add_argument("--ourexec")
+    arg_parser.add_argument("--libvorbisexec")
+    arg_parser.add_argument("--ourout")
+    arg_parser.add_argument("--libvorbisout")
+    arg_parser.add_argument("--dump_stdout", action="store_true")
+    args = arg_parser.parse_args()
+
+    if args.ogg:
+        assert args.ourexec and not args.ourout
+        args.ourout = create_debug_out(args.ourexec, args.ogg)
+        if args.libvorbisexec:
+            assert not args.libvorbisout
+            args.libvorbisout = create_debug_out(args.libvorbisexec, args.ogg)
+
+    reader1 = Reader(args.ourout)
+    print("Read our (ParseOggVorbis) debug out file:", reader1.filename)
+    print("Our decoder name:", reader1.decoder_name)
+    print("Our num channels:", reader1.decoder_num_channels)
+    print("Our sample rate:", reader1.decoder_sample_rate)
+
+    reader2 = None
+    if args.libvorbisout:
+        reader2 = Reader(args.libvorbisout)
+        print("Read libvorbis debug out file:", reader2.filename)
+        print("libvorbis decoder name:", reader2.decoder_name)
+        print("libvorbis num channels:", reader2.decoder_num_channels)
+        print("libvorbis sample rate:", reader2.decoder_sample_rate)
+        assert reader2.decoder_sample_rate == reader1.decoder_sample_rate
+        assert reader2.decoder_num_channels == reader1.decoder_num_channels
+
+    reader1.read_setup(dump=args.dump_stdout)
+    if reader2:
+        reader2.read_setup(dump=args.dump_stdout)
+        assert len(reader1.floors) == len(reader2.floors)
+        for f1, f2 in zip(reader1.floors, reader2.floors):
+            assert f1.multiplier == f2.multiplier
+            assert len(f1.xs) == len(f2.xs)
+            for x1, x2 in zip(f1.xs, f2.xs):
+                assert x1 == x2
+
+    while True:
+        try:
+            name, channel, data = reader1.read_entry()
+        except EOFError:
+            print("Reached EOF.")
+            break
+        if args.dump_stdout:
+            reader1.dump_entry(name, channel, data)
 
 
 if __name__ == '__main__':

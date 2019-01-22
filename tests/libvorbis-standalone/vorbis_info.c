@@ -336,6 +336,7 @@ static int _vorbis_unpack_books(vorbis_info *vi,oggpack_buffer *opb){
 
   if(oggpack_read(opb,1)!=1)goto err_out; /* top level EOP check */
 
+  push_data_u8(vi, "finish_setup", -1, 0, 0);
   return(0);
  err_out:
   vorbis_info_clear(vi);
