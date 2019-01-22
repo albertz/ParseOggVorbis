@@ -1028,7 +1028,7 @@ struct VorbisStreamInfo {
 				CHECK(residue_data.size() >= window.size() / 2);
 				for(size_t i = 0; i < window.size() / 2; ++i)
 					residue_data[i] *= floor_data[i];
-				push_data_float(this, "after_dot", channel, residue_data.begin(), residue_data.size());
+				push_data_float(this, "after_envelope", channel, residue_data.begin(), residue_data.size());
 			}
 			else
 				residue_outputs[channel].clear();

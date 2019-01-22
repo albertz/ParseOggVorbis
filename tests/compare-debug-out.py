@@ -54,6 +54,20 @@ def assert_same_list(l1, l2):
         assert y1 == y2, "different at pos %i: %r vs %r" % (i, l1, l2)
 
 
+def assert_close_list(l1, l2, eps=1e-10):
+    """
+    :param list|tuple l1:
+    :param list|tuple l2:
+    :param float eps:
+    """
+    if l1 is None or l2 is None:
+        assert l1 is None and l2 is None
+        return
+    assert len(l1) == len(l2)
+    for i, (y1, y2) in enumerate(zip(l1, l2)):
+        assert abs(y1 - y2) < eps, "different at pos %i: %r vs %r" % (i, l1, l2)
+
+
 class FloorData:
     def __init__(self, channel, floor):
         """
@@ -75,6 +89,28 @@ class FloorData:
         assert_same_list(self.ys, other.ys)
 
 
+class BeforeMdctData:
+    """
+    "after_envelope" in the dump.
+    """
+    def __init__(self, channel, data):
+        """
+        :param int channel:
+        :param tuple[float] data:
+        """
+        self.channel = channel
+        self.data = data
+
+    @classmethod
+    def assert_same(cls, self, other):
+        """
+        :param BeforeMdctData self:
+        :param BeforeMdctData other:
+        """
+        assert self.channel == other.channel
+        assert_close_list(self.data, other.data)
+
+
 class AudioPacket:
     def __init__(self, reader, dump):
         """
@@ -92,11 +128,14 @@ class AudioPacket:
         self.eof = False
         assert name == "start_audio_packet"
         self.floor_data = []  # type: typing.List[FloorData]
+        self.before_mdct_data = []  # type: typing.List[BeforeMdctData]
         while True:
             name, channel, data = self._read_entry()
             if name == "floor_number":
                 assert len(data) == 1 and isinstance(data[0], int)
                 self._read_floor_data(channel=channel, number=data[0])
+            if name == "after_envelope":
+                self.before_mdct_data.append(BeforeMdctData(channel=channel, data=data))
             if name == "finish_audio_packet":
                 break
 
@@ -139,6 +178,9 @@ class AudioPacket:
         assert len(self.floor_data) == len(other.floor_data)
         for f1, f2 in zip(self.floor_data, other.floor_data):
             FloorData.assert_same(f1, f2)
+        assert len(self.before_mdct_data) == len(other.before_mdct_data)
+        for d1, d2 in zip(self.before_mdct_data, other.before_mdct_data):
+            BeforeMdctData.assert_same(d1, d2)
 
 
 class Reader:
@@ -331,6 +373,7 @@ def main():
         print("libvorbis decoder name:", reader2.decoder_name)
         print("libvorbis num channels:", reader2.decoder_num_channels)
         print("libvorbis sample rate:", reader2.decoder_sample_rate)
+        print("Will check that both are the same.")
         assert reader2.decoder_sample_rate == reader1.decoder_sample_rate
         assert reader2.decoder_num_channels == reader1.decoder_num_channels
 
@@ -349,7 +392,11 @@ def main():
         packet1 = reader1.read_audio_packet(dump=args.dump_stdout)
         if reader2:
             packet2 = reader2.read_audio_packet(dump=args.dump_stdout)
-            AudioPacket.assert_same(packet1, packet2)
+            try:
+                AudioPacket.assert_same(packet1, packet2)
+            except Exception:
+                print("Exception at packet %i." % num_packets)
+                raise
         if packet1.eof:
             break
         num_packets += 1
