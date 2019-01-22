@@ -35,6 +35,7 @@
 		501898F221F4A5E700F1EF4D /* libvorbis-demo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */; };
 		501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
 		501898F721F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
+		501898F921F7740500F1EF4D /* mdct.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898F821F7740500F1EF4D /* mdct.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -124,6 +125,8 @@
 		501898F321F5B15D00F1EF4D /* inverse_db_table.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = inverse_db_table.h; sourceTree = "<group>"; };
 		501898F421F5B1C600F1EF4D /* Callbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Callbacks.h; sourceTree = "<group>"; };
 		501898F521F5C52E00F1EF4D /* Callbacks.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Callbacks.cpp; sourceTree = "<group>"; };
+		501898F821F7740500F1EF4D /* mdct.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
+		501898FA21F7740C00F1EF4D /* mdct.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mdct.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,6 +178,8 @@
 		23309B3921E3AAA100892406 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				501898FA21F7740C00F1EF4D /* mdct.h */,
+				501898F821F7740500F1EF4D /* mdct.c */,
 				23309B3A21E3AAA100892406 /* main.cpp */,
 				23309B4221E4FCEF00892406 /* crctable.h */,
 				23309B4321E6574400892406 /* Utils.hpp */,
@@ -364,6 +369,7 @@
 				501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */,
 				23309B3B21E3AAA100892406 /* main.cpp in Sources */,
 				23309B4521E6577F00892406 /* Utils.cpp in Sources */,
+				501898F921F7740500F1EF4D /* mdct.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
