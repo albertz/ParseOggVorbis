@@ -89,31 +89,9 @@ class FloorData:
         assert_same_list(self.ys, other.ys)
 
 
-class BeforeMdctData:
+class FloatData:
     """
-    "after_envelope" in the dump.
-    """
-    def __init__(self, channel, data):
-        """
-        :param int channel:
-        :param tuple[float] data:
-        """
-        self.channel = channel
-        self.data = data
-
-    @classmethod
-    def assert_same(cls, self, other):
-        """
-        :param BeforeMdctData self:
-        :param BeforeMdctData other:
-        """
-        assert self.channel == other.channel
-        assert_close_list(self.data, other.data)
-
-
-class ResidueData:
-    """
-    "after_reside" in the dump.
+    "after_reside" in the dump. Or "pcm_after_mdct". Or "after_envelope".
     """
     def __init__(self, channel, data):
         """
@@ -126,8 +104,8 @@ class ResidueData:
     @classmethod
     def assert_same(cls, self, other):
         """
-        :param ResidueData self:
-        :param ResidueData other:
+        :param FloatData self:
+        :param FloatData other:
         """
         assert self.channel == other.channel
         assert_close_list(self.data, other.data)
@@ -150,19 +128,28 @@ class AudioPacket:
         self.eof = False
         assert name == "start_audio_packet"
         self.floor_data = []  # type: typing.List[FloorData]
-        self.residue_data = []  # type: typing.List[ResidueData]
-        self.before_mdct_data = []  # type: typing.List[BeforeMdctData]
+        self.residue_data = []  # type: typing.List[FloatData]
+        self.before_mdct_data = []  # type: typing.List[FloatData]
+        self.pcm_after_mdct_data = []  # type: typing.List[FloatData]
         while True:
             name, channel, data = self._read_entry()
             if name == "floor_number":
                 assert len(data) == 1 and isinstance(data[0], int)
                 self._read_floor_data(channel=channel, number=data[0])
-            if name == "after_residue":
-                self.residue_data.append(ResidueData(channel=channel, data=data))
-            if name == "after_envelope":
-                self.before_mdct_data.append(BeforeMdctData(channel=channel, data=data))
-            if name == "finish_audio_packet":
+            elif name == "after_residue":
+                self.residue_data.append(FloatData(channel=channel, data=data))
+            elif name == "after_envelope":
+                self.before_mdct_data.append(FloatData(channel=channel, data=data))
+            elif name == "pcm_after_mdct":
+                self.pcm_after_mdct_data.append(FloatData(channel=channel, data=data))
+            elif name == "finish_audio_packet":
                 break
+            elif name in ["floor1 final_ys", "floor1 step2_flag", "floor1 floor", "floor_outputs",
+                          "floor1 fit_value unwrapped"]:
+                pass  # unhandled for now...
+            else:
+                print("unknown entry %r" % name)
+        assert len(self.pcm_after_mdct_data) == len(self.before_mdct_data)
 
     def _push_back_entry(self, *args):
         self._push_back_entry_cache.append(args)
@@ -204,11 +191,14 @@ class AudioPacket:
         for f1, f2 in zip(self.floor_data, other.floor_data):
             FloorData.assert_same(f1, f2)
         assert len(self.residue_data) == len(other.residue_data)
-        for r1, r2 in zip(self.residue_data, other.residue_data):
-            ResidueData.assert_same(r1, r2)
+        for f1, f2 in zip(self.residue_data, other.residue_data):
+            FloatData.assert_same(f1, f2)
         assert len(self.before_mdct_data) == len(other.before_mdct_data)
-        for d1, d2 in zip(self.before_mdct_data, other.before_mdct_data):
-            BeforeMdctData.assert_same(d1, d2)
+        for f1, f2 in zip(self.before_mdct_data, other.before_mdct_data):
+            FloatData.assert_same(f1, f2)
+        assert len(self.pcm_after_mdct_data) == len(other.pcm_after_mdct_data)
+        for f1, f2 in zip(self.pcm_after_mdct_data, other.pcm_after_mdct_data):
+            FloatData.assert_same(f1, f2)
 
 
 class Reader:

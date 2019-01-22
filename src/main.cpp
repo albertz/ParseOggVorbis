@@ -20,6 +20,7 @@
 #include <string.h>
 #include "Utils.hpp"
 #include "inverse_db_table.h"
+#include "mdct.h"
 #include "Callbacks.h"
 
 
@@ -838,6 +839,7 @@ struct VorbisStreamSetup { // used in VorbisStreamInfo
 	std::vector<VorbisResidue> residues;
 	std::vector<VorbisMapping> mappings;
 	std::vector<VorbisModeNumber> modes;
+	Mdct mdct[2];
 	
 	OkOrError parse(BitReader& reader, VorbisIdHeader& header) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
@@ -904,6 +906,9 @@ struct VorbisStreamSetup { // used in VorbisStreamInfo
 		// Check that we are at the end now.
 		CHECK(reader.readBitsT<8>() == 0);
 		CHECK(reader.reachedEnd());
+
+		mdct[0].init(header.get_blocksize_0());
+		mdct[1].init(header.get_blocksize_1());
 		return OkOrError();
 	}
 };
@@ -1035,9 +1040,17 @@ struct VorbisStreamInfo {
 		}
 
 		// 4.3.7. inverse MDCT
-		// TODO...
-		//CHECK(false);
-		
+		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
+			DataRange<float> residue_data(residue_outputs[channel]);
+			Mdct& mdct = setup.mdct[mode.block_flag ? 1 : 0];
+			CHECK(mdct.n == residue_data.size() * 2);
+			std::vector<float> pcm(mdct.n);
+			mdct.backward(residue_data.begin(), pcm.data());
+			pcm.resize(residue_data.size());
+			push_data_float(this, "pcm_after_mdct", channel, pcm.data(), pcm.size());
+			// TODO use pcm...
+		}
+
 		push_data_u8(this, "finish_audio_packet", -1, nullptr, 0);
 		return OkOrError();
 	}
