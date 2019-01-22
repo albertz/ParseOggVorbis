@@ -111,6 +111,28 @@ class BeforeMdctData:
         assert_close_list(self.data, other.data)
 
 
+class ResidueData:
+    """
+    "after_reside" in the dump.
+    """
+    def __init__(self, channel, data):
+        """
+        :param int channel:
+        :param tuple[float] data:
+        """
+        self.channel = channel
+        self.data = data
+
+    @classmethod
+    def assert_same(cls, self, other):
+        """
+        :param ResidueData self:
+        :param ResidueData other:
+        """
+        assert self.channel == other.channel
+        assert_close_list(self.data, other.data)
+
+
 class AudioPacket:
     def __init__(self, reader, dump):
         """
@@ -128,12 +150,15 @@ class AudioPacket:
         self.eof = False
         assert name == "start_audio_packet"
         self.floor_data = []  # type: typing.List[FloorData]
+        self.residue_data = []  # type: typing.List[ResidueData]
         self.before_mdct_data = []  # type: typing.List[BeforeMdctData]
         while True:
             name, channel, data = self._read_entry()
             if name == "floor_number":
                 assert len(data) == 1 and isinstance(data[0], int)
                 self._read_floor_data(channel=channel, number=data[0])
+            if name == "after_residue":
+                self.residue_data.append(ResidueData(channel=channel, data=data))
             if name == "after_envelope":
                 self.before_mdct_data.append(BeforeMdctData(channel=channel, data=data))
             if name == "finish_audio_packet":
@@ -178,6 +203,9 @@ class AudioPacket:
         assert len(self.floor_data) == len(other.floor_data)
         for f1, f2 in zip(self.floor_data, other.floor_data):
             FloorData.assert_same(f1, f2)
+        assert len(self.residue_data) == len(other.residue_data)
+        for r1, r2 in zip(self.residue_data, other.residue_data):
+            ResidueData.assert_same(r1, r2)
         assert len(self.before_mdct_data) == len(other.before_mdct_data)
         for d1, d2 in zip(self.before_mdct_data, other.before_mdct_data):
             BeforeMdctData.assert_same(d1, d2)

@@ -612,8 +612,6 @@ struct VorbisResidue {
 
 	uint32_t getDecodeLen(uint32_t window_len) const {
 		uint32_t decode_len = window_len / 2;
-		if(type == 2)
-			decode_len *= 2;
 		return decode_len;
 	}
 
@@ -639,7 +637,7 @@ struct VorbisResidue {
 			CHECK_ERR(decode(reader, codebooks, 1, tmp_channel_used, num_channel * decode_len, tmp_out, 1));
 			for(uint8_t j = 0; j < num_channel; ++j)
 				for(uint32_t i = 0; i < decode_len; ++i)
-					out[j][i] = tmp_out[0][i + num_channel * j];
+					out[j][i] = tmp_out[0][j + num_channel * i];
 			return OkOrError();
 		}
 		CHECK(type == 0 || type == 1);
@@ -949,14 +947,15 @@ struct VorbisStreamInfo {
 			bool use_output = false;
 			CHECK_ERR(floor.decode(reader, setup.codebooks, out, use_output));
 			floor_output_used[channel] = use_output;
-			push_data_float(this, "floor_outputs", channel, out.begin(), out.size());
+			if(use_output)
+				push_data_float(this, "floor_outputs", channel, out.begin(), out.size());
 		}
 		
 		// 4.3.3. nonzero vector propagate
 		for(VorbisMapping::Coupling& coupling : mapping.couplings) {
-			if(!floor_output_used[coupling.angle] || !floor_output_used[coupling.magintude]) {
-				floor_output_used[coupling.angle] = false;
-				floor_output_used[coupling.magintude] = false;
+			if(floor_output_used[coupling.angle] || floor_output_used[coupling.magintude]) {
+				floor_output_used[coupling.angle] = true;
+				floor_output_used[coupling.magintude] = true;
 			}
 		}
 
@@ -972,6 +971,7 @@ struct VorbisStreamInfo {
 					++num_channel_per_submap;
 				}
 			}
+			channel_used.resize(num_channel_per_submap);
 			VorbisResidue& residue = setup.residues[submap.residue];
 			uint32_t decode_len = residue.getDecodeLen((uint32_t) window.size());
 			std::vector<std::vector<float>> out(num_channel_per_submap);
@@ -987,10 +987,12 @@ struct VorbisStreamInfo {
 				}
 			}
 		}
+		for(uint8_t channel = 0; channel < header.audio_channels; ++channel)
+			push_data_float(this, "after_residue", channel, &residue_outputs[channel][0], residue_outputs[channel].size());
 
 		// 4.3.5. inverse coupling
 		for(size_t i = mapping.couplings.size(); i > 0; --i) {
-			VorbisMapping::Coupling& coupling = mapping.couplings[i];
+			VorbisMapping::Coupling& coupling = mapping.couplings[i - 1];
 			std::vector<float>& magnitude_vector = residue_outputs[coupling.magintude];
 			std::vector<float>& angle_vector = residue_outputs[coupling.angle];
 			CHECK(magnitude_vector.size() == angle_vector.size());

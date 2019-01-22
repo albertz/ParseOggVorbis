@@ -753,6 +753,8 @@ static int mapping0_inverse(vorbis_block *vb,vorbis_info_mapping *l){
       inverse(vb,b->residue[info->residuesubmap[i]],
               pcmbundle,zerobundle,ch_in_bundle);
   }
+  for(i=0;i<vi->channels;i++)
+    push_data_float(vi, "after_residue", i, vb->pcm[i], n / 2);
 
   /* channel coupling */
   for(i=info->coupling_steps-1;i>=0;i--){
