@@ -717,6 +717,7 @@ static int mapping0_inverse(vorbis_block *vb,vorbis_info_mapping *l){
   /* recover the spectral envelope; store it in the PCM vector for now */
   for(i=0;i<vi->channels;i++){
     int submap=info->chmuxlist[i];
+	push_data_int(vi, "floor_number", i, &info->floorsubmap[submap], 1);
     floormemo[i]=_floor_P[ci->floor_type[info->floorsubmap[submap]]]->
       inverse1(vb,b->flr[info->floorsubmap[submap]]);
     if(floormemo[i])

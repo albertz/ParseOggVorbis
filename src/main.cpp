@@ -943,6 +943,7 @@ struct VorbisStreamInfo {
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
+			push_data_u8(this, "floor_number", channel, &floor_number, 1);
 			VorbisFloor& floor = setup.floors[floor_number];
 			DataRange<float> out(&floor_outputs[window.size() * channel], window.size());
 			bool use_output = false;

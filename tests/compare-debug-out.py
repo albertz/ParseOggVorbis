@@ -30,27 +30,115 @@ def create_debug_out(exec_path, ogg_filename):
 
 
 class Floor1:
-    def __init__(self, multiplier, xs):
+    def __init__(self, number, multiplier, xs):
         """
+        :param int number:
         :param int multiplier:
         :param tuple[int] xs:
         """
+        self.number = number
         self.multiplier = multiplier
         self.xs = xs
 
 
+def assert_same_list(l1, l2):
+    """
+    :param list|tuple l1:
+    :param list|tuple l2:
+    """
+    if l1 is None or l2 is None:
+        assert l1 is None and l2 is None
+        return
+    assert len(l1) == len(l2)
+    for i, (y1, y2) in enumerate(zip(l1, l2)):
+        assert y1 == y2, "different at pos %i: %r vs %r" % (i, l1, l2)
+
+
+class FloorData:
+    def __init__(self, channel, floor):
+        """
+        :param int channel:
+        :param Floor1 floor:
+        """
+        self.channel = channel
+        self.floor = floor
+        self.ys = None  # type: typing.Union[typing.Tuple[int],None]
+
+    @classmethod
+    def assert_same(cls, self, other):
+        """
+        :param FloorData self:
+        :param FloorData other:
+        """
+        assert self.channel == other.channel
+        assert self.floor.number == other.floor.number
+        assert_same_list(self.ys, other.ys)
+
+
 class AudioPacket:
+    def __init__(self, reader, dump):
+        """
+        :param Reader reader:
+        :param bool dump:
+        """
+        self._push_back_entry_cache = []
+        self.reader = reader
+        self.dump = dump
+        try:
+            name, channel, data = self._read_entry()
+        except EOFError:
+            self.eof = True
+            return
+        self.eof = False
+        assert name == "start_audio_packet"
+        self.floor_data = []  # type: typing.List[FloorData]
+        while True:
+            name, channel, data = self._read_entry()
+            if name == "floor_number":
+                assert len(data) == 1 and isinstance(data[0], int)
+                self._read_floor_data(channel=channel, number=data[0])
+            if name == "finish_audio_packet":
+                break
+
+    def _push_back_entry(self, *args):
+        self._push_back_entry_cache.append(args)
+
+    def _read_entry(self):
+        if self._push_back_entry_cache:
+            return self._push_back_entry_cache.pop(-1)
+        name, channel, data = self.reader.read_entry()
+        if self.dump:
+            self.reader.dump_entry(name, channel, data)
+        return name, channel, data
+
+    def _read_floor_data(self, channel, number):
+        """
+        :param int channel:
+        :param int number:
+        """
+        assert 0 <= number < len(self.reader.floors)
+        floor = self.reader.floors[number]
+        floor_data = FloorData(channel=channel, floor=floor)
+        self.floor_data.append(floor_data)
+        name, channel, data = self._read_entry()
+        if name != "floor1 ys":
+            # It is valid to have an empty floor, i.e. packet without audio.
+            self._push_back_entry(name, channel, data)
+            return
+        floor_data.ys = data
+
     @classmethod
     def assert_same(cls, self, other):
         """
         :param AudioPacket self:
         :param AudioPacket other:
         """
-        if not self or not other:
-            assert self is None and other is None
+        assert self.eof == other.eof
+        if self.eof:
             return
-        assert isinstance(self, AudioPacket) and isinstance(other, AudioPacket)
-        # TODO ...
+        assert len(self.floor_data) == len(other.floor_data)
+        for f1, f2 in zip(self.floor_data, other.floor_data):
+            FloorData.assert_same(f1, f2)
 
 
 class Reader:
@@ -202,28 +290,14 @@ class Reader:
             assert name == "floor1_unpack xs"
             assert len(xs) > 0
             assert isinstance(xs[0], int)
-            self.floors.append(Floor1(multiplier=multiplier, xs=xs))
+            self.floors.append(Floor1(number=len(self.floors), multiplier=multiplier, xs=xs))
 
     def read_audio_packet(self, dump):
         """
         :param bool dump:
-        :rtype: AudioPacket|None
+        :rtype: AudioPacket
         """
-        try:
-            name, channel, data = self.read_entry()
-        except EOFError:
-            return None
-        if dump:
-            self.dump_entry(name, channel, data)
-        assert name == "start_audio_packet"
-        audio_packet = AudioPacket()
-        while True:
-            name, channel, data = self.read_entry()
-            if dump:
-                self.dump_entry(name, channel, data)
-            if name == "finish_audio_packet":
-                break
-        return audio_packet
+        return AudioPacket(reader=self, dump=dump)
 
 
 def main():
@@ -276,7 +350,7 @@ def main():
         if reader2:
             packet2 = reader2.read_audio_packet(dump=args.dump_stdout)
             AudioPacket.assert_same(packet1, packet2)
-        if not packet1:
+        if packet1.eof:
             break
         num_packets += 1
     print("Finished. Num audio packets:", num_packets)
