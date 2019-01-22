@@ -11,6 +11,8 @@
 #include <set>
 #include <string>
 #include <iostream>
+#include <type_traits>
+#include <iterator>
 
 static int decoder_unique_idx = 1;
 
@@ -83,51 +85,75 @@ template<> struct TypeInfo<uint8_t> : TypeInfoBase<uint8_t> {
 	static constexpr const char* name = "u8";
 	typedef int num_type;
 };
+template<> struct TypeInfo<bool> : TypeInfoBase<bool> {
+	static constexpr const char* name = "bool";
+};
 
-template<typename T>
-void push_data_short_stdout_T(void* ref, const char* name, int channel, const T* data, size_t len) {
+template<typename It, typename T=typename std::iterator_traits<It>::value_type>
+struct IsNull {
+	static bool check(const It& it) {
+		return ((const T*) it) == nullptr;
+	}
+};
+template<typename It>
+struct IsNull<It> {
+	static bool check(const It& it) {
+		return false;
+	}
+};
+template<typename It>
+bool is_null(const It& it) { return IsNull<It>::check(it); }
+
+template<typename It>
+void push_data_short_stdout_T(void* ref, const char* name, int channel, It data, const It& end) {
+	typedef typename std::iterator_traits<It>::value_type T;
 	Info& info = get_decoder(ref);
 	std::cout
 	<< "decoder=" << info.idx << " '" << info.name << "' name='" << name << "'"
 	<< " channel=" << channel;
-	if(!data) {
+	if(is_null(data)) {
 		std::cout << " data=NULL";
 	}
 	else {
 		std::cout << " data=" << TypeInfo<T>::name << "{";
-		for(size_t i = 0; i < len; ++i) {
+		size_t len = end - data;
+		for(size_t i = 0; data != end; ++i, ++data) {
 			if(i == 10) {
 				std::cout << " ...";
 				break;
 			}
 			if(i > 0) std::cout << " ";
-			std::cout << (typename TypeInfo<T>::num_type) data[i];
+			std::cout << (typename TypeInfo<T>::num_type) *data;
 		}
 		std::cout << "} len=" << len;
 	}
 	std::cout << std::endl;
 }
 
-template<typename T>
-void push_data_T(void* ref, const char* name, int channel, const T* data, size_t len) {
+template<typename It>
+void push_data_T(void* ref, const char* name, int channel, const It& data, const It& end) {
 	//Info& info = get_decoder(ref);
-	push_data_short_stdout_T(ref, name, channel, data, len);
+	push_data_short_stdout_T(ref, name, channel, data, end);
 }
 
 extern "C" void push_data_float(void* ref, const char* name, int channel, const float* data, size_t len) {
-	push_data_T(ref, name, channel, data, len);
+	push_data_T(ref, name, channel, data, data + len);
 }
 extern "C" void push_data_u32(void* ref, const char* name, int channel, const uint32_t* data, size_t len) {
-	push_data_T(ref, name, channel, data, len);
+	push_data_T(ref, name, channel, data, data + len);
 }
 extern "C" void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
-	push_data_T(ref, name, channel, data, len);
+	push_data_T(ref, name, channel, data, data + len);
 }
 extern "C" void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len) {
-	push_data_T(ref, name, channel, data, len);
+	push_data_T(ref, name, channel, data, data + len);
 }
 extern "C" void push_data_int(void* ref, const char* name, int channel, const int* data, size_t len) {
-	push_data_T(ref, name, channel, data, len);
+	push_data_T(ref, name, channel, data, data + len);
+}
+
+void push_data_bool(void* ref, const char* name, int channel, const std::vector<bool>& data) {
+	push_data_T(ref, name, channel, data.begin(), data.end());
 }
 
 extern "C" const char* generic_itoa(uint32_t val, int base, int len) {

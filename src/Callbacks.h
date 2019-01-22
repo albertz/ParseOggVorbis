@@ -14,6 +14,8 @@
 #include <stdio.h>
 
 #ifdef __cplusplus
+#include <vector>
+
 extern "C" {
 #endif
 #if 0
@@ -45,6 +47,9 @@ const char* generic_itoa(uint32_t val, int base, int len);
 #endif
 #ifdef __cplusplus
 }
+
+// C++ only
+void push_data_bool(void* ref, const char* name, int channel, const std::vector<bool>& data);
 #endif
 
 #endif /* Callbacks_h */

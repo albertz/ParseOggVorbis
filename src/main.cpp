@@ -303,7 +303,7 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		for(uint8_t len = 0; len < 32; ++len) {
 			if(len > 0)
 				for(Entry& entry : entries_) {
-					if(entry.unused()) continue;
+					assert(!entry.unused());
 					if(entry.len_ == len && entry.codeword_ == word)
 						return entry.num_;
 				}
@@ -455,6 +455,7 @@ struct VorbisFloor1 {
 				if(class_bits > 0)
 					cval = codebooks[cl.masterbook].decodeScalar(reader);
 				for(int i = 0; i < class_dim; ++i) {
+					CHECK((cval & csub) < cl.subclass_books.size());
 					int book = cl.subclass_books[cval & csub];
 					cval = cval >> class_bits;
 					ys.push_back((book >= 0) ? codebooks[book].decodeScalar(reader) : 0);
@@ -462,6 +463,7 @@ struct VorbisFloor1 {
 			}
 		}
 		push_data_u32(this, "floor1 ys", -1, &ys[0], ys.size());
+		CHECK(ys.size() == xs.size());
 
 		// Compute curves (7.2.4).
 		// Step 1: Amplitude value synthesis (7.2.4).
@@ -503,6 +505,7 @@ struct VorbisFloor1 {
 			}
 		}
 		push_data_u32(this, "floor1 final_ys", -1, &final_ys[0], final_ys.size());
+		push_data_bool(this, "floor1 step2_flag", -1, step2_flag);
 
 		// Step 2: curve synthesis (7.2.4)
 		// Need sorted xs, final_ys, step2_flag, ascending by the values in xs.
