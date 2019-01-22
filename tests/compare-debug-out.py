@@ -39,6 +39,20 @@ class Floor1:
         self.xs = xs
 
 
+class AudioPacket:
+    @classmethod
+    def assert_same(cls, self, other):
+        """
+        :param AudioPacket self:
+        :param AudioPacket other:
+        """
+        if not self or not other:
+            assert self is None and other is None
+            return
+        assert isinstance(self, AudioPacket) and isinstance(other, AudioPacket)
+        # TODO ...
+
+
 class Reader:
     def __init__(self, filename):
         """
@@ -169,6 +183,8 @@ class Reader:
 
     def read_setup(self, dump):
         """
+        Fills self.floors.
+
         :param bool dump:
         """
         while True:
@@ -187,6 +203,27 @@ class Reader:
             assert len(xs) > 0
             assert isinstance(xs[0], int)
             self.floors.append(Floor1(multiplier=multiplier, xs=xs))
+
+    def read_audio_packet(self, dump):
+        """
+        :param bool dump:
+        :rtype: AudioPacket|None
+        """
+        try:
+            name, channel, data = self.read_entry()
+        except EOFError:
+            return None
+        if dump:
+            self.dump_entry(name, channel, data)
+        assert name == "start_audio_packet"
+        audio_packet = AudioPacket()
+        while True:
+            name, channel, data = self.read_entry()
+            if dump:
+                self.dump_entry(name, channel, data)
+            if name == "finish_audio_packet":
+                break
+        return audio_packet
 
 
 def main():
@@ -233,14 +270,16 @@ def main():
             for x1, x2 in zip(f1.xs, f2.xs):
                 assert x1 == x2
 
+    num_packets = 0
     while True:
-        try:
-            name, channel, data = reader1.read_entry()
-        except EOFError:
-            print("Reached EOF.")
+        packet1 = reader1.read_audio_packet(dump=args.dump_stdout)
+        if reader2:
+            packet2 = reader2.read_audio_packet(dump=args.dump_stdout)
+            AudioPacket.assert_same(packet1, packet2)
+        if not packet1:
             break
-        if args.dump_stdout:
-            reader1.dump_entry(name, channel, data)
+        num_packets += 1
+    print("Finished. Num audio packets:", num_packets)
 
 
 if __name__ == '__main__':

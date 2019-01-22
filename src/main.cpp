@@ -921,6 +921,7 @@ struct VorbisStreamInfo {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
+		push_data_u8(this, "start_audio_packet", -1, nullptr, 0);
 		CHECK(reader.readBitsT<1>() == 0);
 		CHECK(setup.modes.size() > 0);
 		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
@@ -1036,6 +1037,7 @@ struct VorbisStreamInfo {
 		// TODO...
 		//CHECK(false);
 		
+		push_data_u8(this, "finish_audio_packet", -1, nullptr, 0);
 		return OkOrError();
 	}
 };
