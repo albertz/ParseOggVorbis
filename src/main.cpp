@@ -1021,17 +1021,15 @@ struct VorbisStreamInfo {
 		// 4.3.6. dot product
 		// operate inplace on the residue_data.
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
+			DataRange<float> residue_data(residue_outputs[channel]);
 			if(floor_output_used[channel]) {
 				DataRange<float> floor_data(&floor_outputs[window.size() * channel], window.size());
-				DataRange<float> residue_data(residue_outputs[channel]);
 				CHECK(floor_data.size() >= window.size() / 2);
 				CHECK(residue_data.size() >= window.size() / 2);
 				for(size_t i = 0; i < window.size() / 2; ++i)
 					residue_data[i] *= floor_data[i];
-				push_data_float(this, "after_envelope", channel, residue_data.begin(), residue_data.size());
 			}
-			else
-				residue_outputs[channel].clear();
+			push_data_float(this, "after_envelope", channel, residue_data.begin(), residue_data.size());
 		}
 
 		// 4.3.7. inverse MDCT
