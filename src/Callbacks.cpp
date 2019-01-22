@@ -7,12 +7,81 @@
 //
 
 #include "Callbacks.h"
+#include <stdio.h>
 #include <map>
 #include <set>
 #include <string>
 #include <iostream>
 #include <type_traits>
 #include <iterator>
+
+
+typedef float float32_t;
+
+template<typename T>
+struct TypeInfoBase {
+	typedef T type;
+	typedef T num_type; // for std::cout, visual repr
+	typedef T raw_type; // when writing to file
+};
+template<typename T> struct TypeInfo {};
+template<> struct TypeInfo<float32_t> : TypeInfoBase<float32_t> {
+	static constexpr const char* name = "f32";
+	static constexpr uint8_t type_id = 1;
+};
+template<> struct TypeInfo<int32_t> : TypeInfoBase<int32_t> {
+	static constexpr const char* name = "i32";
+	static constexpr uint8_t type_id = 2;
+};
+template<> struct TypeInfo<uint32_t> : TypeInfoBase<uint32_t> {
+	static constexpr const char* name = "u32";
+	static constexpr uint8_t type_id = 3;
+};
+template<> struct TypeInfo<uint8_t> : TypeInfoBase<uint8_t> {
+	static constexpr const char* name = "u8";
+	typedef int num_type;
+	static constexpr uint8_t type_id = 4;
+};
+template<> struct TypeInfo<bool> : TypeInfoBase<bool> {
+	static constexpr const char* name = "bool";
+	typedef uint8_t raw_type;
+	static constexpr uint8_t type_id = 5;
+};
+
+template<typename It, typename T=typename std::iterator_traits<It>::value_type>
+struct ItToPtrTraits {
+	typedef T value_type;
+	static bool is_null(const It& it) {
+		return ((const value_type*) it) == nullptr;
+	}
+	static const value_type* const_cast_to_ptr_or_null(const It& it) {
+		return (const value_type*) it;
+	}
+};
+template<typename It>
+struct ItToPtrTraits<It> {
+	typedef typename std::iterator_traits<It>::value_type value_type;
+	static bool is_null(const It& it) {
+		return false;
+	}
+	static const value_type* const_cast_to_ptr_or_null(const It& it) {
+		return nullptr;
+	}
+};
+template<typename It>
+bool is_null(const It& it) { return ItToPtrTraits<It>::is_null(it); }
+template<typename It>
+const typename std::iterator_traits<It>::value_type* const_cast_to_ptr_or_null(const It& it) {
+	return ItToPtrTraits<It>::const_cast_to_ptr_or_null(it);
+}
+
+
+enum OutputType {
+	OT_null,
+	OT_short_stdout,
+	OT_file,
+} output_type = OT_null;
+std::string output_filename;
 
 static int decoder_unique_idx = 1;
 
@@ -23,7 +92,80 @@ struct Info {
 	std::set<void*> aliases;
 	long sample_rate;
 	int num_channels;
-	Info() : idx(0), ref(nullptr), sample_rate(0), num_channels(0) {}
+	OutputType output_type;
+	FILE* output_file;
+	Info() : idx(0), ref(nullptr), sample_rate(0), num_channels(0), output_type(OT_null), output_file(nullptr) {}
+	~Info() { reset_output_type(); }
+
+	void reset_output_type() {
+		if(output_file) {
+			fclose(output_file);
+			output_file = nullptr;
+		}
+		output_type = OT_null;
+	}
+
+	void set_output_type(OutputType ot, const std::string& fn="") {
+		reset_output_type();
+		output_type = ot;
+		if(ot == OutputType::OT_file) {
+			output_file = fopen(fn.c_str(), "wbx");
+			assert(output_file);
+			raw_write_to_file("ParseOggVorbis-header-v1");
+			write_to_file("decoder-name", name);
+			write_to_file("decoder-sample-rate", (uint32_t) sample_rate);
+			write_to_file("decoder-num-channels", (uint8_t) num_channels);
+		}
+	}
+
+	void raw_write_to_file(const std::string& data) {
+		raw_write_to_file((const uint8_t*)data.data(), (uint32_t)data.size());
+	}
+
+	void raw_write_to_file(const uint8_t* data, uint32_t len) {
+		assert(output_file);
+		// No error checking, and don't care about endian. Just keep it simple.
+		fwrite(&len, sizeof(len), 1, output_file);
+		fwrite(data, 1, len, output_file);
+	}
+
+	template<typename It>
+	void write_to_file(const std::string& key, It begin, It end) {
+		raw_write_to_file(key);
+		typedef typename std::iterator_traits<It>::value_type T;
+		uint8_t raw_type_id = TypeInfo<T>::type_id;
+		raw_write_to_file(&raw_type_id, 1);
+		typedef typename TypeInfo<T>::raw_type raw_type;
+		uint8_t raw_type_size = sizeof(raw_type);
+		raw_write_to_file(&raw_type_size, 1);
+		uint32_t byte_size = uint32_t(end - begin) * sizeof(raw_type);
+		const T* begin_ptr = const_cast_to_ptr_or_null(begin);
+		if(begin_ptr) { // works for most iterators, fails e.g. for std::vector<bool>
+			assert(sizeof(raw_type) == sizeof(T));
+			raw_write_to_file((const uint8_t*)begin_ptr, byte_size);
+		} else {
+			fwrite(&byte_size, sizeof(byte_size), 1, output_file);
+			for(It data = begin; data != end; ++data) {
+				raw_type value = (raw_type) *data;
+				fwrite(&value, sizeof(raw_type), 1, output_file);
+			}
+		}
+	}
+
+	template<typename T> // e.g. int, bool, etc
+	void write_to_file(const std::string& key, const T& value) {
+		typedef typename TypeInfo<T>::raw_type raw_type; // make sure that T is a valid type
+		write_to_file(key, &value, &value + 1);
+	}
+
+	void write_to_file(const std::string& key, const std::string& value_str) {
+		const uint8_t* data = (const uint8_t*) value_str.data();
+		write_to_file(key, data, data + value_str.size());
+	}
+
+	void write_to_file(const std::string& key, const char* value_cstr) {
+		write_to_file(key, std::string(value_cstr));
+	}
 };
 
 std::map<void*, Info> decoders;
@@ -49,6 +191,8 @@ extern "C" void register_decoder_ref(void* ref, const char* decoder_name, long s
 	info.name = decoder_name;
 	info.sample_rate = sample_rate;
 	info.num_channels = num_channels;
+	info.set_output_type(output_type, output_filename);
+	output_type = OT_null; // reset
 }
 
 extern "C" void register_decoder_alias(void* orig_ref, void* alias_ref) {
@@ -64,50 +208,22 @@ extern "C" void unregister_decoder_ref(void* ref) {
 	decoders.erase(info.ref); // warning: after this call, info becomes invalid
 }
 
-typedef float float32_t;
+extern "C" void set_data_output_null(void) {
+	output_type = OT_null;
+}
 
-template<typename T>
-struct TypeInfoBase {
-	typedef T type;
-	typedef T num_type;
-};
-template<typename T> struct TypeInfo {};
-template<> struct TypeInfo<float32_t> : TypeInfoBase<float32_t> {
-	static constexpr const char* name = "f32";
-};
-template<> struct TypeInfo<int32_t> : TypeInfoBase<int32_t> {
-	static constexpr const char* name = "i32";
-};
-template<> struct TypeInfo<uint32_t> : TypeInfoBase<uint32_t> {
-	static constexpr const char* name = "u32";
-};
-template<> struct TypeInfo<uint8_t> : TypeInfoBase<uint8_t> {
-	static constexpr const char* name = "u8";
-	typedef int num_type;
-};
-template<> struct TypeInfo<bool> : TypeInfoBase<bool> {
-	static constexpr const char* name = "bool";
-};
+extern "C" void set_data_output_short_stdout(void) {
+	output_type = OutputType::OT_short_stdout;
+}
 
-template<typename It, typename T=typename std::iterator_traits<It>::value_type>
-struct IsNull {
-	static bool check(const It& it) {
-		return ((const T*) it) == nullptr;
-	}
-};
-template<typename It>
-struct IsNull<It> {
-	static bool check(const It& it) {
-		return false;
-	}
-};
-template<typename It>
-bool is_null(const It& it) { return IsNull<It>::check(it); }
+extern "C" void set_data_output_file(const char* fn) {
+	output_type = OutputType::OT_file;
+	output_filename = fn;
+}
 
 template<typename It>
-void push_data_short_stdout_T(void* ref, const char* name, int channel, It data, const It& end) {
+void push_data_short_stdout_T(Info& info, const char* name, int channel, It data, const It& end) {
 	typedef typename std::iterator_traits<It>::value_type T;
-	Info& info = get_decoder(ref);
 	std::cout
 	<< "decoder=" << info.idx << " '" << info.name << "' name='" << name << "'"
 	<< " channel=" << channel;
@@ -131,9 +247,28 @@ void push_data_short_stdout_T(void* ref, const char* name, int channel, It data,
 }
 
 template<typename It>
+void push_data_file_T(Info& info, const char* name, int channel, const It& data, const It& end) {
+	typedef typename std::iterator_traits<It>::value_type T;
+	assert(info.output_file);
+	info.write_to_file("entry-name", name);
+	if(channel >= 0)
+		info.write_to_file("entry-channel", (uint8_t) channel);
+	info.write_to_file("entry-data", data, end);
+}
+
+template<typename It>
 void push_data_T(void* ref, const char* name, int channel, const It& data, const It& end) {
-	//Info& info = get_decoder(ref);
-	push_data_short_stdout_T(ref, name, channel, data, end);
+	Info& info = get_decoder(ref);
+	switch(info.output_type) {
+		case OutputType::OT_null:
+			break;
+		case OutputType::OT_short_stdout:
+			push_data_short_stdout_T(info, name, channel, data, end);
+			break;
+		case OutputType::OT_file:
+			push_data_file_T(info, name, channel, data, end);
+			break;
+	}
 }
 
 extern "C" void push_data_float(void* ref, const char* name, int channel, const float* data, size_t len) {
@@ -174,4 +309,54 @@ extern "C" const char* generic_itoa(uint32_t val, int base, int len) {
 	while(ptr >= buf + sizeof(buf) - len)
 		*--ptr = '0';
 	return ptr;
+}
+
+void ArgParser::print_usage(const char* argv0) {
+	std::cout << argv0 << " --in ogg_filename [--help] [--debug_out filename] [--debug_stdout]" << std::endl;
+}
+
+bool ArgParser::parse_args(int argc, const char **argv) {
+	for(int i = 1; i < argc; ++i) {
+		if(strcmp(argv[i], "--help") == 0) {
+			print_usage(argv[0]);
+			return false;
+		}
+		else if(strcmp(argv[i], "--in") == 0) {
+			++i;
+			if(i >= argc) {
+				std::cerr << "missing arg after --in" << std::endl;
+				print_usage(argv[0]);
+				return false;
+			}
+			ogg_filename = argv[i];
+			if(ogg_filename.empty()) {
+				std::cerr << "invalid empty filename" << std::endl;
+				print_usage(argv[0]);
+				return false;
+			}
+		}
+		else if(strcmp(argv[i], "--debug_out") == 0) {
+			++i;
+			if(i >= argc) {
+				std::cerr << "missing arg after --debug_out" << std::endl;
+				print_usage(argv[0]);
+				return false;
+			}
+			set_data_output_file(argv[i]);
+		}
+		else if(strcmp(argv[i], "--debug_stdout") == 0) {
+			set_data_output_short_stdout();
+		}
+		else {
+			std::cerr << "unexpected arg " << i << " \"" << argv[i] << "\"" << std::endl;
+			print_usage(argv[0]);
+			return false;
+		}
+	}
+	if(ogg_filename.empty()) {
+		std::cerr << "need to provide --in ogg_filename" << std::endl;
+		print_usage(argv[0]);
+		return false;
+	}
+	return true;
 }

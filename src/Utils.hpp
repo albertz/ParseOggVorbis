@@ -263,7 +263,7 @@ struct IReader {
 
 struct FileReader : IReader {
 	FILE* fp_;
-	FileReader(const char* filename) { fp_ = fopen(filename, "r"); }
+	FileReader(const std::string& filename) { fp_ = fopen(filename.c_str(), "rb"); }
 	virtual ~FileReader() { if(fp_) fclose(fp_); }
 	virtual OkOrError isValid() override { CHECK(fp_ != NULL); return OkOrError(); }
 	virtual bool reachedEnd() override { return feof(fp_); }

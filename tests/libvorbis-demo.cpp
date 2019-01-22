@@ -34,6 +34,10 @@
 char pcmout[4096]; /* take 4k out of the data segment, not the stack */
 
 int main(int argc, const char** argv) {
+	ArgParser args;
+	if(!args.parse_args(argc, argv))
+		return 1;
+
 #ifdef _WIN32 /* We need to set stdin/stdout to binary mode. Damn windows. */
 	/* Beware the evil ifdef. We avoid these where we can, but this one we
 	 cannot. Don't add any more, you'll probably go to hell if you do. */
@@ -41,9 +45,8 @@ int main(int argc, const char** argv) {
 	_setmode(_fileno(stdout), _O_BINARY);
 #endif
 
-	const char* fn = (argc >= 2) ? argv[1] : "";
-	std::cout << "open file: " << fn << std::endl;
-	FILE* file = fopen(fn, "rb");
+	std::cout << "open file: " << args.ogg_filename << std::endl;
+	FILE* file = fopen(args.ogg_filename.c_str(), "rb");
 	if(!file) {
 		std::cerr << "cannot open file" << std::endl;
 		return 1;

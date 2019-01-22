@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 #include "Utils.hpp"
 #include "inverse_db_table.h"
 #include "Callbacks.h"
@@ -1114,7 +1115,7 @@ struct OggReader {
 
 	OggReader() : packet_counts_(0) {}
 	
-	OkOrError full_read(const char* filename) {
+	OkOrError full_read(const std::string& filename) {
 		CHECK_ERR(_open_file(filename));
 		size_t page_count = 0;
 		while(true) {
@@ -1132,7 +1133,7 @@ struct OggReader {
 		return OkOrError();
 	}
 	
-	OkOrError _open_file(const char* fn) {
+	OkOrError _open_file(const std::string& fn) {
 		reader_ = std::make_shared<FileReader>(fn);
 		CHECK_ERR(reader_->isValid());
 		return OkOrError();
@@ -1147,7 +1148,7 @@ struct OggReader {
 		}
 		CHECK(streams_.find(buffer_page_.header.stream_serial_num) != streams_.end());
 		VorbisStreamInfo& stream = streams_[buffer_page_.header.stream_serial_num];
-		
+
 		// pack packets: join seg table with size 255 and first with <255, each is one packet
 		size_t offset = 0;
 		uint32_t len = 0;
@@ -1177,19 +1178,22 @@ struct OggReader {
 			}
 		}
 		CHECK(len == 0 && offset == buffer_page_.data_len);
-		
+
 		if(buffer_page_.header.header_type_flag & HeaderFlag_Last) {
 			streams_.erase(buffer_page_.header.stream_serial_num);
 		}
-		
+
 		return OkOrError();
 	}
 };
 
 
-int main(int argc, const char* argv[]) {
+int main(int argc, const char** argv) {
+	ArgParser args;
+	if(!args.parse_args(argc, argv))
+		return 1;
 	OggReader reader;
-	OkOrError result = reader.full_read((argc >= 2) ? argv[1] : "");
+	OkOrError result = reader.full_read(args.ogg_filename);
 	if(result.is_error_)
 		std::cerr << "error: " << result.err_msg_ << std::endl;
 	else

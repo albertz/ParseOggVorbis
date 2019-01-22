@@ -15,6 +15,7 @@
 
 #ifdef __cplusplus
 #include <vector>
+#include <string>
 
 extern "C" {
 #endif
@@ -29,6 +30,11 @@ void register_decoder_ref(void* ref, const char* decoder_name, long sample_rate,
 void unregister_decoder_ref(void* ref);
 // Such that alias_ref is also a valid ref. orig_ref needs to be registered beforehand.
 void register_decoder_alias(void* orig_ref, void* alias_ref);
+
+// This setting will be used for the next registered decoder.
+void set_data_output_null(void);
+void set_data_output_short_stdout(void);
+void set_data_output_file(const char* fn);
 
 // Name is any descriptive name.
 // Channel can be -1, if it does not apply.
@@ -50,6 +56,12 @@ const char* generic_itoa(uint32_t val, int base, int len);
 
 // C++ only
 void push_data_bool(void* ref, const char* name, int channel, const std::vector<bool>& data);
+
+struct ArgParser {
+	std::string ogg_filename;
+	void print_usage(const char* argv0);
+	bool parse_args(int argc, const char** argv);
+};
 #endif
 
 #endif /* Callbacks_h */
