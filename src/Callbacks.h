@@ -55,7 +55,7 @@ const char* generic_itoa(uint32_t val, int base, int len);
 }
 
 // C++ only
-void push_data_bool(void* ref, const char* name, int channel, const std::vector<bool>& data);
+void push_data_bool(const void* ref, const char* name, int channel, const std::vector<bool>& data);
 
 struct ArgParser {
 	std::string ogg_filename;
