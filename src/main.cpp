@@ -921,17 +921,19 @@ struct VorbisStreamInfo {
 	VorbisStreamInfo() : packet_counts_(0) {}
 	
 	OkOrError parse_audio(BitReader& reader) {
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3
+		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+		// 1.3.2. Decode Procedure (very high level)
+		// 4.3 Audio packet decode and synthesis
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
 		push_data_u8(this, "start_audio_packet", -1, nullptr, 0);
 		CHECK(reader.readBitsT<1>() == 0);
 		CHECK(setup.modes.size() > 0);
+
+		// 4.3.1. packet type, mode and window decode
 		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
 		VorbisModeNumber& mode = setup.modes[mode_idx];
 		VorbisMapping& mapping = setup.mappings[mode.mapping];
-		
-		// Get window. (4.3.1)
 		bool prev_window_flag = false, next_window_flag = false;
 		if(mode.block_flag) {
 			prev_window_flag = reader.readBitsT<1>();
@@ -942,7 +944,7 @@ struct VorbisStreamInfo {
 		std::vector<float> floor_outputs(window.size() * header.audio_channels);
 		std::vector<bool> floor_output_used(header.audio_channels);
 
-		// Floor curves. (4.3.2)
+		// 4.3.2. floor curve decode
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
@@ -964,7 +966,7 @@ struct VorbisStreamInfo {
 			}
 		}
 
-		// Residues. (4.3.4)
+		// 4.3.4. residue decode
 		std::vector<std::vector<float>> residue_outputs(header.audio_channels);
 		for(size_t i = 0; i < mapping.submaps.size(); ++i) {
 			VorbisMapping::Submap& submap = mapping.submaps[i];
@@ -1052,6 +1054,13 @@ struct VorbisStreamInfo {
 		}
 
 		push_data_u8(this, "finish_audio_packet", -1, nullptr, 0);
+
+		// overlap/add data Windowed MDCT output is overlapped and added with the right hand data of the previous window such that the 3/4 point of the previous window is aligned with the 1/4 point of the current window (as illustrated in the window overlap diagram). At this point, the audio data between the center of the previous frame and the center of the current frame is now finished and ready to be returned.
+		// cache right hand data The decoder must cache the right hand portion of the current frame to be lapped with the left hand portion of the next frame.
+		// return finished audio data The overlapped portion produced from overlapping the previous and current frame data is finished data to be returned by the decoder. This data spans from the center of the previous window to the center of the current window. In the case of same-sized windows, the amount of data to return is one-half block consisting of and only of the overlapped portions. When overlapping a short and long window, much of the returned range is not actually overlap. This does not damage transform orthogonality. Pay attention however to returning the correct data range; the amount of data to be returned is:
+		//  window_blocksize(previous_window)/4+window_blocksize(current_window)/4
+		// from the center of the previous window to the center of the current window.
+		// Data is not returned from the first frame; it must be used to ’prime’ the decode engine. The encoder accounts for this priming when calculating PCM offsets; after the first frame, the proper PCM output offset is ’0’ (as no data has been returned yet).
 		return OkOrError();
 	}
 };
