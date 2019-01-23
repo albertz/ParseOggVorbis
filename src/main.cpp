@@ -923,8 +923,9 @@ struct VorbisStreamDecodeState {
 	std::vector<float> pcm_buffer;
 	uint64_t granule_pos;
 
-	VorbisStreamDecodeState() : granule_pos(uint64_t(-1)) {
-
+	VorbisStreamDecodeState() : granule_pos(uint64_t(-1)) {}
+	void init() {
+		// TODO...
 	}
 };
 
@@ -932,10 +933,16 @@ struct VorbisStream {
 	VorbisIdHeader header;
 	VorbisStreamSetup setup;
 	uint32_t packet_counts_;
+	VorbisStreamDecodeState decode_state;
 
 	VorbisStream() : packet_counts_(0) {}
 	
-	OkOrError parse_audio(BitReader& reader) const {
+	OkOrError parse_audio(BitReader& reader, VorbisStreamDecodeState& state) const {
+		// By design, this is a const function, because we will not modify any of the header or the setup.
+		// However, we will modify the decode state, which remembers things like the PCM position,
+		// and recent decoded PCM, which we need for the windowing.
+		// That is why we pass in the decode state as a writeable ref.
+		
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// 1.3.2. Decode Procedure (very high level)
 		// 4.3 Audio packet decode and synthesis
@@ -1142,7 +1149,7 @@ struct VorbisPacket {
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		ConstDataReader reader(data, data_len);
 		BitReader bitReader(&reader);
-		return stream->parse_audio(bitReader);
+		return stream->parse_audio(bitReader, stream->decode_state);
 	}
 };
 
