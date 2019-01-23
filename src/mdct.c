@@ -314,7 +314,7 @@ STIN void mdct_butterfly_generic(DATA_TYPE *T,
   }while(x2>=x);
 }
 
-STIN void mdct_butterflies(mdct_lookup *init,
+STIN void mdct_butterflies(const mdct_lookup *init,
                              DATA_TYPE *x,
                              int points){
 
@@ -344,7 +344,7 @@ void mdct_clear(mdct_lookup *l){
   }
 }
 
-STIN void mdct_bitreverse(mdct_lookup *init,
+STIN void mdct_bitreverse(const mdct_lookup *init,
                             DATA_TYPE *x){
   int        n       = init->n;
   int       *bit     = init->bitrev;
@@ -394,7 +394,7 @@ STIN void mdct_bitreverse(mdct_lookup *init,
   }while(w0<w1);
 }
 
-void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
+void mdct_backward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   int n=init->n;
   int n2=n>>1;
   int n4=n>>2;
@@ -490,7 +490,7 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   }
 }
 
-void mdct_forward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
+void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   int n=init->n;
   int n2=n>>1;
   int n4=n>>2;

@@ -49,7 +49,7 @@ struct __attribute__((packed)) PageHeader {
 	char capture_pattern[4]; // should be "OggS"
 	uint8_t stream_structure_version; // should be 0
 	uint8_t header_type_flag; // 0x1: continued, 0x2: first (bos), 0x4: last (eos)
-	uint64_t absolute_granule_pos;
+	uint64_t absolute_granule_pos; // end PCM sample position of the last packet completed on that page
 	uint32_t stream_serial_num;
 	uint32_t page_sequence_num;
 	uint32_t page_crc_checksum;
@@ -93,6 +93,7 @@ struct Page {
 		calculated_crc = update_crc(calculated_crc, segment_table, header.page_segments_num);
 		calculated_crc = update_crc(calculated_crc, data, data_len);
 		CHECK(expected_crc == calculated_crc);
+		header.page_crc_checksum = calculated_crc;
 		return OkOrError();
 	}
 };
@@ -297,14 +298,14 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		return OkOrError();
 	}
 
-	uint32_t decodeScalar(BitReader& reader) {
+	uint32_t decodeScalar(BitReader& reader) const {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
 		// TODO could be optimized by codeword lookup tree
 		uint32_t word = 0;
 		for(uint8_t len = 0; len < 32; ++len) {
 			if(len > 0)
-				for(Entry& entry : entries_) {
+				for(const Entry& entry : entries_) {
 					assert(!entry.unused());
 					if(entry.len_ == len && entry.codeword_ == word)
 						return entry.num_;
@@ -316,13 +317,13 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 	}
 
 	// Returns vector of size dimensions_, or empty if invalid.
-	DataRange<float> decodeVector(BitReader& reader) {
+	DataRange<const float> decodeVector(BitReader& reader) const {
 		uint32_t idx = decodeScalar(reader);
-		if(lookup_type_ == 0) return DataRange<float>(); // actually this is invalid
-		if(idx >= num_entries_) return DataRange<float>(); // invalid idx
+		if(lookup_type_ == 0) return DataRange<const float>(); // actually this is invalid
+		if(idx >= num_entries_) return DataRange<const float>(); // invalid idx
 		uint32_t offset = idx * dimensions_;
 		assert(offset + dimensions_ <= lookup_table_.size());
-		return DataRange<float>(&lookup_table_[offset], dimensions_);
+		return DataRange<const float>(&lookup_table_[offset], dimensions_);
 	}
 };
 
@@ -349,7 +350,7 @@ struct VorbisFloor0 {
 		return OkOrError();
 	}
 
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
+	OkOrError decode(BitReader& reader, const std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) const {
         // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 6.2.2
 		CHECK(false); // not implemented. but rarely used anyway?
 		(void) reader; (void) codebooks; (void) out; (void) use_output; // remove warnings
@@ -422,7 +423,7 @@ struct VorbisFloor1 {
 		return OkOrError();
 	}
 
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
+	OkOrError decode(BitReader& reader, const std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) const {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 7.2.3
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/floor.go
@@ -449,7 +450,7 @@ struct VorbisFloor1 {
 			ys.push_back(reader.readBits<y_t>(highest_bit(range - 1)));
 			ys.push_back(reader.readBits<y_t>(highest_bit(range - 1)));
 			for(uint8_t class_idx : partition_classes) {
-				VorbisFloorClass& cl = classes[class_idx];
+				const VorbisFloorClass& cl = classes[class_idx];
 				uint8_t class_dim = cl.dimensions;
 				uint8_t class_bits = cl.subclass;
 				uint32_t csub = (uint32_t(1) << class_bits) - 1;
@@ -556,7 +557,7 @@ struct VorbisFloor {
 		return OkOrError();
 	}
 	
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) {
+	OkOrError decode(BitReader& reader, const std::vector<VorbisCodebook>& codebooks, DataRange<float>& out, bool& use_output) const {
         // https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.2
 		if(floor_type == 0)
 			CHECK_ERR(floor0.decode(reader, codebooks, out, use_output));
@@ -616,7 +617,7 @@ struct VorbisResidue {
 		return decode_len;
 	}
 
-	OkOrError decode(BitReader& reader, std::vector<VorbisCodebook>& codebooks, uint8_t num_channel, const std::vector<bool>& channel_used, uint32_t decode_len, std::vector<std::vector<float>>& out, int type=-1) {
+	OkOrError decode(BitReader& reader, const std::vector<VorbisCodebook>& codebooks, uint8_t num_channel, const std::vector<bool>& channel_used, uint32_t decode_len, std::vector<std::vector<float>>& out, int type=-1) const {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.3.4. residue decode
 		// 8.6.2. packet decode
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/residue.go
@@ -647,7 +648,7 @@ struct VorbisResidue {
 		uint32_t limit_end = std::min(end, decode_len);
 		CHECK(limit_begin <= limit_end);
 		CHECK(classbook < codebooks.size());
-		VorbisCodebook& class_codebook = codebooks[classbook];
+		const VorbisCodebook& class_codebook = codebooks[classbook];
 		uint16_t classwords_per_codeword = class_codebook.dimensions_;
 		uint32_t n_to_read = limit_end - limit_begin;
 		if(n_to_read == 0)
@@ -677,14 +678,14 @@ struct VorbisResidue {
 							classification_t vq_class = classifications[j * classification_count_per_channel + partition_count];
 							uint8_t vq_book = books[uint16_t(vq_class) * 8 + pass];
 							if(vq_book != book_t(-1)) {
-								VorbisCodebook& vq_codebook = codebooks[vq_book];
+								const VorbisCodebook& vq_codebook = codebooks[vq_book];
 								std::vector<float>& v = out[j];
 								uint32_t offset = limit_begin + partition_count * partition_size;
 								if(type == 0) {
 									// 8.6.3. format 0 specifics
 									uint32_t step = partition_size / vq_codebook.dimensions_;
 									for(uint32_t k = 0; k < step; ++k) {
-										DataRange<float> temp = vq_codebook.decodeVector(reader);
+										DataRange<const float> temp = vq_codebook.decodeVector(reader);
 										CHECK(temp.size() > 0); CHECK(temp.size() == vq_codebook.dimensions_);
 										for(uint16_t l = 0; l < vq_codebook.dimensions_; ++l)
 											v[offset + k + l * step] += temp[l];
@@ -693,7 +694,7 @@ struct VorbisResidue {
 								else if(type == 1) {
 									// 8.6.4. format 1 specifics
 									for(uint32_t k = 0; k < partition_size;) {
-										DataRange<float> temp = vq_codebook.decodeVector(reader);
+										DataRange<const float> temp = vq_codebook.decodeVector(reader);
 										CHECK(temp.size() > 0); CHECK(temp.size() == vq_codebook.dimensions_);
 										for(uint32_t l = 0; l < vq_codebook.dimensions_; ++l, ++k)
 											v[offset + k] += temp[l];
@@ -811,13 +812,18 @@ struct VorbisModeNumber { // used in VorbisStreamSetup
 		}
 		return OkOrError();
 	}
-	
+
 	DataRange<float> _getWindow(int idx) {
 		assert(idx >= 0 && idx < (block_flag ? 4 : 1));
 		return DataRange<float>(&windows[idx * blocksize], blocksize);
 	}
-	
-	DataRange<float> getWindow(bool prev, bool next) {
+
+	DataRange<const float> _getWindow(int idx) const {
+		assert(idx >= 0 && idx < (block_flag ? 4 : 1));
+		return DataRange<const float>(&windows[idx * blocksize], blocksize);
+	}
+
+	DataRange<const float> getWindow(bool prev, bool next) const {
 		int win_idx = 0;
 		if(block_flag) {
 			if(next) {
@@ -913,14 +919,23 @@ struct VorbisStreamSetup { // used in VorbisStreamInfo
 	}
 };
 
-struct VorbisStreamInfo {
+struct VorbisStreamDecodeState {
+	std::vector<float> pcm_buffer;
+	uint64_t granule_pos;
+
+	VorbisStreamDecodeState() : granule_pos(uint64_t(-1)) {
+
+	}
+};
+
+struct VorbisStream {
 	VorbisIdHeader header;
 	VorbisStreamSetup setup;
 	uint32_t packet_counts_;
 
-	VorbisStreamInfo() : packet_counts_(0) {}
+	VorbisStream() : packet_counts_(0) {}
 	
-	OkOrError parse_audio(BitReader& reader) {
+	OkOrError parse_audio(BitReader& reader) const {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// 1.3.2. Decode Procedure (very high level)
 		// 4.3 Audio packet decode and synthesis
@@ -932,14 +947,14 @@ struct VorbisStreamInfo {
 
 		// 4.3.1. packet type, mode and window decode
 		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
-		VorbisModeNumber& mode = setup.modes[mode_idx];
-		VorbisMapping& mapping = setup.mappings[mode.mapping];
+		const VorbisModeNumber& mode = setup.modes[mode_idx];
+		const VorbisMapping& mapping = setup.mappings[mode.mapping];
 		bool prev_window_flag = false, next_window_flag = false;
 		if(mode.block_flag) {
 			prev_window_flag = reader.readBitsT<1>();
 			next_window_flag = reader.readBitsT<1>();
 		}
-		DataRange<float> window = mode.getWindow(prev_window_flag, next_window_flag);
+		DataRange<const float> window = mode.getWindow(prev_window_flag, next_window_flag);
 		CHECK((window.size() >> 16) == 0); // window size should fit in uint16_t
 		std::vector<float> floor_outputs(window.size() * header.audio_channels);
 		std::vector<bool> floor_output_used(header.audio_channels);
@@ -949,7 +964,7 @@ struct VorbisStreamInfo {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
 			push_data_u8(this, "floor_number", channel, &floor_number, 1);
-			VorbisFloor& floor = setup.floors[floor_number];
+			const VorbisFloor& floor = setup.floors[floor_number];
 			DataRange<float> out(&floor_outputs[window.size() * channel], window.size());
 			bool use_output = false;
 			CHECK_ERR(floor.decode(reader, setup.codebooks, out, use_output));
@@ -959,7 +974,7 @@ struct VorbisStreamInfo {
 		}
 		
 		// 4.3.3. nonzero vector propagate
-		for(VorbisMapping::Coupling& coupling : mapping.couplings) {
+		for(const VorbisMapping::Coupling& coupling : mapping.couplings) {
 			if(floor_output_used[coupling.angle] || floor_output_used[coupling.magintude]) {
 				floor_output_used[coupling.angle] = true;
 				floor_output_used[coupling.magintude] = true;
@@ -969,7 +984,7 @@ struct VorbisStreamInfo {
 		// 4.3.4. residue decode
 		std::vector<std::vector<float>> residue_outputs(header.audio_channels);
 		for(size_t i = 0; i < mapping.submaps.size(); ++i) {
-			VorbisMapping::Submap& submap = mapping.submaps[i];
+			const VorbisMapping::Submap& submap = mapping.submaps[i];
 			uint8_t num_channel_per_submap = 0;
 			std::vector<bool> channel_used(header.audio_channels);
 			for(uint8_t j = 0; j < header.audio_channels; ++j) {
@@ -979,7 +994,7 @@ struct VorbisStreamInfo {
 				}
 			}
 			channel_used.resize(num_channel_per_submap);
-			VorbisResidue& residue = setup.residues[submap.residue];
+			const VorbisResidue& residue = setup.residues[submap.residue];
 			uint32_t decode_len = residue.getDecodeLen((uint32_t) window.size());
 			std::vector<std::vector<float>> out(num_channel_per_submap);
 			for(uint8_t j = 0; j < num_channel_per_submap; ++j)
@@ -999,7 +1014,7 @@ struct VorbisStreamInfo {
 
 		// 4.3.5. inverse coupling
 		for(size_t i = mapping.couplings.size(); i > 0; --i) {
-			VorbisMapping::Coupling& coupling = mapping.couplings[i - 1];
+			const VorbisMapping::Coupling& coupling = mapping.couplings[i - 1];
 			std::vector<float>& magnitude_vector = residue_outputs[coupling.magintude];
 			std::vector<float>& angle_vector = residue_outputs[coupling.angle];
 			CHECK(magnitude_vector.size() == angle_vector.size());
@@ -1044,7 +1059,7 @@ struct VorbisStreamInfo {
 		// 4.3.7. inverse MDCT
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			DataRange<float> residue_data(residue_outputs[channel]);
-			Mdct& mdct = setup.mdct[mode.block_flag ? 1 : 0];
+			const Mdct& mdct = setup.mdct[mode.block_flag ? 1 : 0];
 			CHECK(mdct.n == residue_data.size() * 2);
 			std::vector<float> pcm(mdct.n);
 			mdct.backward(residue_data.begin(), pcm.data());
@@ -1067,7 +1082,7 @@ struct VorbisStreamInfo {
 
 
 struct VorbisPacket {
-	VorbisStreamInfo* stream;
+	VorbisStream* stream;
 	uint8_t* data;
 	uint32_t data_len; // never more than 256*256
 	
@@ -1135,7 +1150,7 @@ struct VorbisPacket {
 struct OggReader {
 	char buffer_[255];
 	Page buffer_page_;
-	std::map<uint32_t, VorbisStreamInfo> streams_;
+	std::map<uint32_t, VorbisStream> streams_;
 	size_t packet_counts_;
 	std::shared_ptr<IReader> reader_;
 
@@ -1169,11 +1184,11 @@ struct OggReader {
 		CHECK_ERR(buffer_page_.read(reader_.get()));
 		if(buffer_page_.header.header_type_flag & HeaderFlag_First) {
 			CHECK(streams_.find(buffer_page_.header.stream_serial_num) == streams_.end());
-			streams_[buffer_page_.header.stream_serial_num] = VorbisStreamInfo();
+			streams_[buffer_page_.header.stream_serial_num] = VorbisStream();
 			std::cout << "new stream: " << buffer_page_.header.stream_serial_num << std::endl;
 		}
 		CHECK(streams_.find(buffer_page_.header.stream_serial_num) != streams_.end());
-		VorbisStreamInfo& stream = streams_[buffer_page_.header.stream_serial_num];
+		VorbisStream& stream = streams_[buffer_page_.header.stream_serial_num];
 
 		// pack packets: join seg table with size 255 and first with <255, each is one packet
 		size_t offset = 0;

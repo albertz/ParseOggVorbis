@@ -67,8 +67,8 @@ typedef struct {
 
 extern void mdct_init(mdct_lookup *lookup,int n);
 extern void mdct_clear(mdct_lookup *l);
-extern void mdct_forward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
-extern void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
+extern void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
+extern void mdct_backward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
 
 #if 0
 { // to keep Xcode happy
@@ -88,7 +88,7 @@ struct Mdct {
 		mdct_init(&l, n);
 		_initialized = true;
 	}
-	void backward(DATA_TYPE *in, DATA_TYPE *out) {
+	void backward(DATA_TYPE *in, DATA_TYPE *out) const {
 		assert(_initialized);
 		mdct_backward(&l, in, out);
 	}
