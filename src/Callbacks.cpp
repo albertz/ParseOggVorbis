@@ -88,8 +88,8 @@ static int decoder_unique_idx = 1;
 struct Info {
 	int idx;
 	std::string name;
-	void* ref;
-	std::set<void*> aliases;
+	const void* ref;
+	std::set<const void*> aliases;
 	long sample_rate;
 	int num_channels;
 	OutputType output_type;
@@ -168,10 +168,10 @@ struct Info {
 	}
 };
 
-std::map<void*, Info> decoders;
-std::map<void*, void*> decoder_alias_map;
+std::map<const void*, Info> decoders;
+std::map<const void*, const void*> decoder_alias_map;
 
-static Info& get_decoder(void* ref) {
+static Info& get_decoder(const void* ref) {
 	auto alias_it = decoder_alias_map.find(ref);
 	if(alias_it != decoder_alias_map.end())
 		ref = alias_it->second;
@@ -180,7 +180,7 @@ static Info& get_decoder(void* ref) {
 	return it->second;
 }
 
-extern "C" void register_decoder_ref(void* ref, const char* decoder_name, long sample_rate, int num_channels) {
+extern "C" void register_decoder_ref(const void* ref, const char* decoder_name, long sample_rate, int num_channels) {
 	Info& info = decoders[ref];
 	if(!info.idx) {
 		assert(decoder_unique_idx);
@@ -195,15 +195,15 @@ extern "C" void register_decoder_ref(void* ref, const char* decoder_name, long s
 	output_type = OT_null; // reset
 }
 
-extern "C" void register_decoder_alias(void* orig_ref, void* alias_ref) {
+extern "C" void register_decoder_alias(const void* orig_ref, const void* alias_ref) {
 	Info& info = get_decoder(orig_ref);
 	info.aliases.insert(alias_ref);
 	decoder_alias_map[alias_ref] = info.ref;
 }
 
-extern "C" void unregister_decoder_ref(void* ref) {
+extern "C" void unregister_decoder_ref(const void* ref) {
 	Info& info = get_decoder(ref);
-	for(void* alias_ref : info.aliases)
+	for(const void* alias_ref : info.aliases)
 		decoder_alias_map.erase(alias_ref);
 	decoders.erase(info.ref); // warning: after this call, info becomes invalid
 }
@@ -257,7 +257,7 @@ void push_data_file_T(Info& info, const char* name, int channel, const It& data,
 }
 
 template<typename It>
-void push_data_T(void* ref, const char* name, int channel, const It& data, const It& end) {
+void push_data_T(const void* ref, const char* name, int channel, const It& data, const It& end) {
 	Info& info = get_decoder(ref);
 	switch(info.output_type) {
 		case OutputType::OT_null:
@@ -271,23 +271,23 @@ void push_data_T(void* ref, const char* name, int channel, const It& data, const
 	}
 }
 
-extern "C" void push_data_float(void* ref, const char* name, int channel, const float* data, size_t len) {
+extern "C" void push_data_float(const void* ref, const char* name, int channel, const float* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_u32(void* ref, const char* name, int channel, const uint32_t* data, size_t len) {
+extern "C" void push_data_u32(const void* ref, const char* name, int channel, const uint32_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
+extern "C" void push_data_u8(const void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len) {
+extern "C" void push_data_i32(const void* ref, const char* name, int channel, const int32_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_int(void* ref, const char* name, int channel, const int* data, size_t len) {
+extern "C" void push_data_int(const void* ref, const char* name, int channel, const int* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
 
-void push_data_bool(void* ref, const char* name, int channel, const std::vector<bool>& data) {
+void push_data_bool(const void* ref, const char* name, int channel, const std::vector<bool>& data) {
 	push_data_T(ref, name, channel, data.begin(), data.end());
 }
 

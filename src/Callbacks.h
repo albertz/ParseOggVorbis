@@ -26,10 +26,10 @@ extern "C" {
 // ref could be eg vorbis_info in libvorbis.
 // It is not an error to call this multiple times for the same ref.
 // However, it is an error to call any of the other functions without calling this first.
-void register_decoder_ref(void* ref, const char* decoder_name, long sample_rate, int num_channels);
-void unregister_decoder_ref(void* ref);
+void register_decoder_ref(const void* ref, const char* decoder_name, long sample_rate, int num_channels);
+void unregister_decoder_ref(const void* ref);
 // Such that alias_ref is also a valid ref. orig_ref needs to be registered beforehand.
-void register_decoder_alias(void* orig_ref, void* alias_ref);
+void register_decoder_alias(const void* orig_ref, const void* alias_ref);
 
 // This setting will be used for the next registered decoder.
 void set_data_output_null(void);
@@ -39,11 +39,11 @@ void set_data_output_file(const char* fn);
 // Name is any descriptive name.
 // Channel can be -1, if it does not apply.
 // data can be NULL, if no data. In that case, len is ignored.
-void push_data_float(void* ref, const char* name, int channel, const float* data, size_t len);
-void push_data_u32(void* ref, const char* name, int channel, const uint32_t* data, size_t len);
-void push_data_u8(void* ref, const char* name, int channel, const uint8_t* data, size_t len);
-void push_data_i32(void* ref, const char* name, int channel, const int32_t* data, size_t len);
-void push_data_int(void* ref, const char* name, int channel, const int* data, size_t len);
+void push_data_float(const void* ref, const char* name, int channel, const float* data, size_t len);
+void push_data_u32(const void* ref, const char* name, int channel, const uint32_t* data, size_t len);
+void push_data_u8(const void* ref, const char* name, int channel, const uint8_t* data, size_t len);
+void push_data_i32(const void* ref, const char* name, int channel, const int32_t* data, size_t len);
+void push_data_int(const void* ref, const char* name, int channel, const int* data, size_t len);
 
 // General utilities.
 const char* generic_itoa(uint32_t val, int base, int len);
