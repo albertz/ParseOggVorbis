@@ -10,7 +10,6 @@
 #define ParseOggVorbis_h
 
 
-#include <iostream>
 #include <bitset>
 #include <string>
 #include <map>
@@ -102,7 +101,7 @@ struct Page {
 	}
 };
 
-struct __attribute__((packed)) VorbisIdHeader {
+struct __attribute__((packed)) VorbisIdHeader { // used in VorbisStream
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.2. Identification header
 	uint32_t vorbis_version;
 	uint8_t audio_channels;
@@ -842,14 +841,13 @@ struct VorbisModeNumber { // used in VorbisStreamSetup
 	}
 };
 
-struct VorbisStreamSetup { // used in VorbisStreamInfo
+struct VorbisStreamSetup { // used in VorbisStream
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 	std::vector<VorbisCodebook> codebooks;
 	std::vector<VorbisFloor> floors;
 	std::vector<VorbisResidue> residues;
 	std::vector<VorbisMapping> mappings;
 	std::vector<VorbisModeNumber> modes;
-	Mdct mdct[2];
 
 	OkOrError parse(BitReader& reader, VorbisIdHeader& header) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
@@ -916,11 +914,17 @@ struct VorbisStreamSetup { // used in VorbisStreamInfo
 		// Check that we are at the end now.
 		CHECK(reader.readBitsT<8>() == 0);
 		CHECK(reader.reachedEnd());
-
-		mdct[0].init(header.get_blocksize_0());
-		mdct[1].init(header.get_blocksize_1());
 		return OkOrError();
 	}
+};
+
+struct ParseCallbacks {
+	// Returning false means to stop.
+	virtual bool gotHeader(const VorbisIdHeader& header) { return true; }
+	// TODO gotComments ...
+	virtual bool gotSetup(const VorbisStreamSetup& setup) { return true; }
+	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) { return true; }
+	virtual bool gotEof() { return true; }
 };
 
 struct VorbisStreamDecodeState {
@@ -938,10 +942,11 @@ struct VorbisStream {
 	VorbisStreamSetup setup;
 	uint32_t packet_counts_;
 	VorbisStreamDecodeState decode_state;
+	Mdct mdct[2];
 
 	VorbisStream() : packet_counts_(0) {}
 
-	OkOrError parse_audio(BitReader& reader, VorbisStreamDecodeState& state) const {
+	OkOrError parse_audio(BitReader& reader, VorbisStreamDecodeState& state, ParseCallbacks& callbacks) const {
 		// By design, this is a const function, because we will not modify any of the header or the setup.
 		// However, we will modify the decode state, which remembers things like the PCM position,
 		// and recent decoded PCM, which we need for the windowing.
@@ -1070,7 +1075,7 @@ struct VorbisStream {
 		// 4.3.7. inverse MDCT
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			DataRange<float> residue_data(residue_outputs[channel]);
-			const Mdct& mdct = setup.mdct[mode.block_flag ? 1 : 0];
+			const Mdct& mdct = this->mdct[mode.block_flag ? 1 : 0];
 			CHECK(mdct.n == residue_data.size() * 2);
 			std::vector<float> pcm(mdct.n);
 			mdct.backward(residue_data.begin(), pcm.data());
@@ -1097,7 +1102,7 @@ struct VorbisPacket {
 	uint8_t* data;
 	uint32_t data_len; // never more than 256*256
 
-	OkOrError parse_id() {
+	OkOrError parse_id(ParseCallbacks& callbacks) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.2
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
@@ -1106,14 +1111,12 @@ struct VorbisPacket {
 		CHECK(data_len - 7 == sizeof(VorbisIdHeader));
 		VorbisIdHeader& header = stream->header;
 		memcpy(&header, &data[7], sizeof(VorbisIdHeader));
-		std::cout << "vorbis version: " << header.vorbis_version
-		<< ", channels: " << (int) header.audio_channels
-		<< ", sample rate: " << header.audio_sample_rate << std::endl;
 		CHECK(header.framing_flag == 1);
+		CHECK(callbacks.gotHeader(header));
 		return OkOrError();
 	}
 
-	OkOrError parse_comment() {
+	OkOrError parse_comment(ParseCallbacks& callbacks) {
 		// https://xiph.org/vorbis/doc/v-comment.html
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.3
 		// Meta tags, etc.
@@ -1122,10 +1125,11 @@ struct VorbisPacket {
 		CHECK(type == 3);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		// ignore for now...
+		// TODO...
 		return OkOrError();
 	}
 
-	OkOrError parse_setup() {
+	OkOrError parse_setup(ParseCallbacks& callbacks) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.4
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
@@ -1135,6 +1139,8 @@ struct VorbisPacket {
 		BitReader bitReader(&reader);
 		CHECK_ERR(stream->setup.parse(bitReader, stream->header));
 		CHECK(reader.reachedEnd());
+		stream->mdct[0].init(stream->header.get_blocksize_0());
+		stream->mdct[1].init(stream->header.get_blocksize_1());
 		register_decoder_ref(stream, "ParseOggVorbis", stream->header.audio_sample_rate, stream->header.audio_channels);
 		for(VorbisFloor& floor : stream->setup.floors) {
 			if(floor.floor_type == 1) {
@@ -1145,15 +1151,16 @@ struct VorbisPacket {
 			}
 		}
 		push_data_u8(stream, "finish_setup", -1, nullptr, 0);
+		CHECK(callbacks.gotSetup(stream->setup));
 		return OkOrError();
 	}
 
-	OkOrError parse_audio() {
+	OkOrError parse_audio(ParseCallbacks& callbacks) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		ConstDataReader reader(data, data_len);
 		BitReader bitReader(&reader);
-		return stream->parse_audio(bitReader, stream->decode_state);
+		return stream->parse_audio(bitReader, stream->decode_state, callbacks);
 	}
 };
 
@@ -1163,39 +1170,40 @@ struct OggReader {
 	std::map<uint32_t, VorbisStream> streams_;
 	size_t packet_counts_;
 	std::shared_ptr<IReader> reader_;
+	ParseCallbacks& callbacks_;
 
-	OggReader() : packet_counts_(0) {}
+	OggReader(ParseCallbacks& callbacks) : packet_counts_(0), callbacks_(callbacks) {}
 
-	OkOrError full_read(const std::string& filename) {
-		CHECK_ERR(_open_file(filename));
-		size_t page_count = 0;
-		while(true) {
-			Page::ReadHeaderResult res = buffer_page_.read_header(reader_.get());
-			if(res == Page::ReadHeaderResult::Ok)
-				CHECK_ERR(_read_page());
-			else if(res == Page::ReadHeaderResult::Eof)
-				break;
-			else
-				return OkOrError("read error");
-			++page_count;
-		}
-		std::cout << "Ogg total page count: " << page_count << std::endl;
-		std::cout << "Ogg total packets count: " << packet_counts_ << std::endl;
-		return OkOrError();
-	}
-
-	OkOrError _open_file(const std::string& fn) {
-		reader_ = std::make_shared<FileReader>(fn);
+	OkOrError open_file(const std::string& filename) {
+		reader_ = std::make_shared<FileReader>(filename);
 		CHECK_ERR(reader_->isValid());
 		return OkOrError();
 	}
 
-	OkOrError _read_page() {
+	OkOrError read_next_page(bool& reached_eof) {
+		Page::ReadHeaderResult res = buffer_page_.read_header(reader_.get());
+		if(res == Page::ReadHeaderResult::Ok)
+			CHECK_ERR(_read_page());
+		else if(res == Page::ReadHeaderResult::Eof)
+			reached_eof = true;
+		else
+			return OkOrError("read error");
+		return OkOrError();
+	}
+
+	OkOrError full_read(const std::string& filename) {
+		CHECK_ERR(open_file(filename));
+		bool reached_eof = false;
+		while(!reached_eof)
+			CHECK_ERR(read_next_page(reached_eof));
+		return OkOrError();
+	}
+
+	OkOrError _read_page() { // Called after buffer_page_.read_header().
 		CHECK_ERR(buffer_page_.read(reader_.get()));
 		if(buffer_page_.header.header_type_flag & HeaderFlag_First) {
 			CHECK(streams_.find(buffer_page_.header.stream_serial_num) == streams_.end());
 			streams_[buffer_page_.header.stream_serial_num] = VorbisStream();
-			std::cout << "new stream: " << buffer_page_.header.stream_serial_num << std::endl;
 		}
 		CHECK(streams_.find(buffer_page_.header.stream_serial_num) != streams_.end());
 		VorbisStream& stream = streams_[buffer_page_.header.stream_serial_num];
@@ -1215,13 +1223,13 @@ struct OggReader {
 				packet.data = buffer_page_.data + offset;
 				packet.data_len = len;
 				if(stream.packet_counts_ == 0)
-					CHECK_ERR(packet.parse_id());
+					CHECK_ERR(packet.parse_id(callbacks_));
 				else if(stream.packet_counts_ == 1)
-					CHECK_ERR(packet.parse_comment());
+					CHECK_ERR(packet.parse_comment(callbacks_));
 				else if(stream.packet_counts_ == 2)
-					CHECK_ERR(packet.parse_setup());
+					CHECK_ERR(packet.parse_setup(callbacks_));
 				else
-					CHECK_ERR(packet.parse_audio());
+					CHECK_ERR(packet.parse_audio(callbacks_));
 				++stream.packet_counts_;
 				++packet_counts_;
 				offset += len;
@@ -1231,6 +1239,7 @@ struct OggReader {
 		CHECK(len == 0 && offset == buffer_page_.data_len);
 
 		if(buffer_page_.header.header_type_flag & HeaderFlag_Last) {
+			CHECK(callbacks_.gotEof());
 			streams_.erase(buffer_page_.header.stream_serial_num);
 		}
 

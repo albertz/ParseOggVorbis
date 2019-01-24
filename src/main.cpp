@@ -11,15 +11,46 @@
 #include "Utils.hpp"
 #include "Callbacks.h"
 
+struct MyParseCallbacks : ParseCallbacks {
+	virtual bool gotHeader(const VorbisIdHeader& header) {
+		std::cout
+		<< "Header: vorbis version: " << header.vorbis_version
+		<< ", channels: " << (int) header.audio_channels
+		<< ", sample rate: " << header.audio_sample_rate
+		<< std::endl;
+		return true;
+	}
+	virtual bool gotSetup(const VorbisStreamSetup& setup) {
+		std::cout
+		<< "Setup: num codebooks: " << setup.codebooks.size()
+		<< ", num floors: " << setup.floors.size()
+		<< ", num mappings: " << setup.mappings.size()
+		<< ", num modes: " << setup.modes.size()
+		<< ", num residues: " << setup.residues.size()
+		<< std::endl;
+		return true;
+	}
+	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) {
+		return true;
+	}
+	virtual bool gotEof() {
+		std::cout << "got eof" << std::endl;
+		return true;
+	}
+};
+
 int main(int argc, const char** argv) {
 	ArgParser args;
 	if(!args.parse_args(argc, argv))
 		return 1;
-	OggReader reader;
+	MyParseCallbacks callbacks;
+	OggReader reader(callbacks);
 	OkOrError result = reader.full_read(args.ogg_filename);
-	if(result.is_error_)
+	if(result.is_error_) {
 		std::cerr << "error: " << result.err_msg_ << std::endl;
-	else
-		std::cout << "ok" << std::endl;
-	return (int) result.is_error_;
+		return 1;
+	}
+	std::cout << "ok" << std::endl;
+	std::cout << "Ogg total packets count: " << reader.packet_counts_ << std::endl;
+	return 0;
 }
