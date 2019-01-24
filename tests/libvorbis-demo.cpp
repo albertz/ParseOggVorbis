@@ -74,24 +74,21 @@ int main(int argc, const char** argv) {
 	}
 
 	size_t sample_count = 0;
-	int eof = 0;
+	bool eof = false;
 	while(!eof) {
 		int current_section;
 		long ret = ov_read(&vf, pcmout, sizeof(pcmout), 0, 2, 1, &current_section);
 		if(ret == 0) {
 			/* EOF */
-			eof = 1;
+			eof = true;
 		} else if(ret < 0) {
-			if(ret == OV_EBADLINK){
+			if(ret == OV_EBADLINK)
 				std::cerr << "Corrupt bitstream section! Exiting." << std::endl;
-				exit(1);
-			}
-
-			/* some other error in the stream.  Not a problem, just reporting it in
-			 case we (the app) cares.  In this case, we don't. */
+			else
+				std::cerr << "error reading: " << ret << std::endl;
+			return 1;
 		} else {
-			/* we don't bother dealing with sample rate changes, etc, but
-			 you'll have to */
+			/* we don't bother dealing with sample rate changes, etc, but you'll have to */
 			//fwrite(pcmout, 1, ret, stdout);
 			sample_count += ret;
 		}
