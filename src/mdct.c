@@ -394,16 +394,16 @@ STIN void mdct_bitreverse(const mdct_lookup *init,
   }while(w0<w1);
 }
 
-void mdct_backward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
+void mdct_backward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out){
   int n=init->n;
   int n2=n>>1;
   int n4=n>>2;
 
   /* rotate */
 
-  DATA_TYPE *iX = in+n2-7;
+  const DATA_TYPE *iX = in+n2-7;
   DATA_TYPE *oX = out+n2+n4;
-  DATA_TYPE *T  = init->trig+n4;
+  const DATA_TYPE *T  = init->trig+n4;
 
   do{
     oX         -= 4;
@@ -490,7 +490,7 @@ void mdct_backward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   }
 }
 
-void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
+void mdct_forward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out){
   int n=init->n;
   int n2=n>>1;
   int n4=n>>2;
@@ -504,9 +504,9 @@ void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
 
   REG_TYPE r0;
   REG_TYPE r1;
-  DATA_TYPE *x0=in+n2+n4;
-  DATA_TYPE *x1=x0+1;
-  DATA_TYPE *T=init->trig+n2;
+  const DATA_TYPE *x0=in+n2+n4;
+  const DATA_TYPE *x1=x0+1;
+  const DATA_TYPE *T=init->trig+n2;
 
   int i=0;
 
@@ -551,12 +551,12 @@ void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   /* roatate + window */
 
   T=init->trig+n2;
-  x0=out+n2;
+  DATA_TYPE* y0=out+n2;
 
   for(i=0;i<n4;i++){
-    x0--;
+    y0--;
     out[i] =MULT_NORM((w[0]*T[0]+w[1]*T[1])*init->scale);
-    x0[0]  =MULT_NORM((w[0]*T[1]-w[1]*T[0])*init->scale);
+    y0[0]  =MULT_NORM((w[0]*T[1]-w[1]*T[0])*init->scale);
     w+=2;
     T+=2;
   }

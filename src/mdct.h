@@ -10,7 +10,7 @@
  *                                                                  *
  ********************************************************************
 
- function: modified discrete cosine transform prototypes
+ function: modified discrete cosine transform (MDCT) prototypes
 
  ********************************************************************/
 
@@ -67,8 +67,11 @@ typedef struct {
 
 extern void mdct_init(mdct_lookup *lookup,int n);
 extern void mdct_clear(mdct_lookup *l);
-extern void mdct_forward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
-extern void mdct_backward(const mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out);
+
+// MDCT: R^2N -> R^N
+extern void mdct_forward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out);
+// iMDCT: R^N -> R^2N
+extern void mdct_backward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out);
 
 #if 0
 { // to keep Xcode happy
