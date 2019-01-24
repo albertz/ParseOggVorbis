@@ -1159,7 +1159,6 @@ struct VorbisPacket {
 
 
 struct OggReader {
-	char buffer_[255];
 	Page buffer_page_;
 	std::map<uint32_t, VorbisStream> streams_;
 	size_t packet_counts_;
@@ -1180,8 +1179,8 @@ struct OggReader {
 				return OkOrError("read error");
 			++page_count;
 		}
-		std::cout << "page count: " << page_count << std::endl;
-		std::cout << "packets count: " << packet_counts_ << std::endl;
+		std::cout << "Ogg total page count: " << page_count << std::endl;
+		std::cout << "Ogg total packets count: " << packet_counts_ << std::endl;
 		return OkOrError();
 	}
 
