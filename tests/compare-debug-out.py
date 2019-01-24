@@ -120,11 +120,16 @@ class AudioPacket:
         self._push_back_entry_cache = []
         self.reader = reader
         self.dump = dump
-        try:
-            name, channel, data = self._read_entry()
-        except EOFError:
-            self.eof = True
-            return
+        while True:
+            try:
+                name, channel, data = self._read_entry()
+            except EOFError:
+                self.eof = True
+                return
+            if name == "pcm":
+                reader.add_pcm_data(channel=channel, pcm_data=data)
+                continue
+            break
         self.eof = False
         assert name == "start_audio_packet"
         self.floor_data = []  # type: typing.List[FloorData]
@@ -214,6 +219,8 @@ class Reader:
         self.decoder_sample_rate = self.read_single_int_expect_key("decoder-sample-rate")
         self.decoder_num_channels = self.read_single_int_expect_key("decoder-num-channels")
         self.floors = []  # type: typing.List[Floor1]
+        self.pcm_data = []  # type: typing.List[typing.Tuple[int, typing.Tuple[float, ...]]]
+        self.num_samples = {}  # per channel
 
     def raw_read(self, expect_size=None):
         """
@@ -359,6 +366,15 @@ class Reader:
         """
         return AudioPacket(reader=self, dump=dump)
 
+    def add_pcm_data(self, channel, pcm_data):
+        """
+        :param int channel:
+        :param tuple[float] pcm_data: raw samples
+        """
+        self.pcm_data.append((channel, pcm_data))
+        self.num_samples.setdefault(channel, 0)
+        self.num_samples[channel] += len(pcm_data)
+
 
 def main():
     better_exchook.install()
@@ -418,7 +434,11 @@ def main():
         if packet1.eof:
             break
         num_packets += 1
-    print("Finished. Num audio packets:", num_packets)
+    print("Finished.")
+    print("Num audio packets:", num_packets)
+    print("Reader1 num samples:", reader1.num_samples)
+    if reader2:
+        print("Reader2 num samples:", reader2.num_samples)
 
 
 if __name__ == '__main__':

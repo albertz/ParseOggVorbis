@@ -29,6 +29,7 @@
 #include "lpc.h"
 #include "registry.h"
 #include "misc.h"
+#include "Callbacks.h"
 
 /* pcm accumulator examples (not exhaustive):
 
@@ -951,6 +952,11 @@ int vorbis_synthesis_pcmout(vorbis_dsp_state *v,float ***pcm){
 
 int vorbis_synthesis_read(vorbis_dsp_state *v,int n){
   if(n && v->pcm_returned+n>v->pcm_current)return(OV_EINVAL);
+  {
+    int i;
+    for(i=0; i < v->vi->channels; i++)
+      push_data_float(v->vi, "pcm", i, v->pcm[i] + v->pcm_returned, n);
+  }
   v->pcm_returned+=n;
   return(0);
 }

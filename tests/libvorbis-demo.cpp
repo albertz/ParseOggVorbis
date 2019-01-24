@@ -90,7 +90,7 @@ int main(int argc, const char** argv) {
 		} else {
 			/* we don't bother dealing with sample rate changes, etc, but you'll have to */
 			//fwrite(pcmout, 1, ret, stdout);
-			sample_count += ret;
+			sample_count += ret / 2 / ov_info(&vf, -1)->channels;
 		}
 	}
 
