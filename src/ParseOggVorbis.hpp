@@ -802,15 +802,13 @@ struct VorbisModeNumber { // used in VorbisStreamSetup
 			uint16_t right_begin = blocksize - blocksize / 4 - right / 2;
 			for(int i = 0; i < left; ++i) {
 				float x = sinf(M_PI_2 * (i + 0.5) / left);
-				x *= x;
-				window[left_begin + i] = sinf(M_PI_2 * x);
+				window[left_begin + i] = sinf(M_PI_2 * x * x);
 			}
 			for(int i = left_begin + left; i < right_begin; ++i)
 				window[i] = 1;
 			for(int i = 0; i < right; ++i) {
 				float x = sinf(M_PI_2 * (right - i - .5) / right);
-				x *= x;
-				window[right_begin + i] = sinf(M_PI_2 * x);
+				window[right_begin + i] = sinf(M_PI_2 * x * x);
 			}
 		}
 		return OkOrError();
