@@ -799,7 +799,7 @@ static int mapping0_inverse(vorbis_block *vb,vorbis_info_mapping *l){
   for(i=0;i<vi->channels;i++){
     float *pcm=vb->pcm[i];
     mdct_backward(b->transform[vb->W][0],pcm,pcm);
-    push_data_float(vi, "pcm_after_mdct", i, pcm, n / 2);
+    push_data_float(vi, "pcm_after_mdct", i, pcm, n);
   }
 
   push_data_u8(vi, "finish_audio_packet", -1, 0, 0);

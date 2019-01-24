@@ -68,9 +68,9 @@ typedef struct {
 extern void mdct_init(mdct_lookup *lookup,int n);
 extern void mdct_clear(mdct_lookup *l);
 
-// MDCT: R^2N -> R^N
+// MDCT: R^N -> R^(N/2)
 extern void mdct_forward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out);
-// iMDCT: R^N -> R^2N
+// iMDCT: R^(N/2) -> R^N
 extern void mdct_backward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYPE *out);
 
 #if 0
@@ -91,7 +91,7 @@ struct Mdct {
 		mdct_init(&l, n);
 		_initialized = true;
 	}
-	void backward(DATA_TYPE *in, DATA_TYPE *out) const {
+	void backward(const DATA_TYPE *in, DATA_TYPE *out) const {
 		assert(_initialized);
 		mdct_backward(&l, in, out);
 	}

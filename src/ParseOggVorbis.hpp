@@ -767,7 +767,7 @@ struct VorbisMapping {
 };
 
 struct VorbisModeNumber { // used in VorbisStreamSetup
-	bool block_flag;
+	bool block_flag; // == long window
 	uint16_t window_type;
 	uint16_t transform_type;
 	uint8_t mapping;
@@ -1071,13 +1071,12 @@ struct VorbisStream {
 		}
 
 		// 4.3.7. inverse MDCT
+		const Mdct& mdct = this->mdct[mode.block_flag ? 1 : 0];
+		std::vector<float> pcm(mdct.n);
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			DataRange<float> residue_data(residue_outputs[channel]);
-			const Mdct& mdct = this->mdct[mode.block_flag ? 1 : 0];
 			CHECK(mdct.n == residue_data.size() * 2);
-			std::vector<float> pcm(mdct.n);
 			mdct.backward(residue_data.begin(), pcm.data());
-			pcm.resize(residue_data.size());
 			push_data_float(this, "pcm_after_mdct", channel, pcm.data(), pcm.size());
 			// TODO use pcm...
 		}
