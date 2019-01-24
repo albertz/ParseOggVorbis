@@ -49,7 +49,7 @@ struct __attribute__((packed)) PageHeader {
 	char capture_pattern[4]; // should be "OggS"
 	uint8_t stream_structure_version; // should be 0
 	uint8_t header_type_flag; // 0x1: continued, 0x2: first (bos), 0x4: last (eos)
-	uint64_t absolute_granule_pos; // end PCM sample position of the last packet completed on that page
+	int64_t absolute_granule_pos; // end PCM sample position of the last packet completed on that page
 	uint32_t stream_serial_num;
 	uint32_t page_sequence_num;
 	uint32_t page_crc_checksum;
@@ -942,7 +942,7 @@ struct VorbisStream {
 		// However, we will modify the decode state, which remembers things like the PCM position,
 		// and recent decoded PCM, which we need for the windowing.
 		// That is why we pass in the decode state as a writeable ref.
-		
+
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// 1.3.2. Decode Procedure (very high level)
 		// 4.3 Audio packet decode and synthesis
