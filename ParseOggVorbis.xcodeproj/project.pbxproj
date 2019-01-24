@@ -127,6 +127,7 @@
 		501898F521F5C52E00F1EF4D /* Callbacks.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Callbacks.cpp; sourceTree = "<group>"; };
 		501898F821F7740500F1EF4D /* mdct.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
 		501898FA21F7740C00F1EF4D /* mdct.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mdct.h; sourceTree = "<group>"; };
+		501898FB21F9B29000F1EF4D /* ParseOggVorbis.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ParseOggVorbis.hpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +188,7 @@
 				501898F321F5B15D00F1EF4D /* inverse_db_table.h */,
 				501898F421F5B1C600F1EF4D /* Callbacks.h */,
 				501898F521F5C52E00F1EF4D /* Callbacks.cpp */,
+				501898FB21F9B29000F1EF4D /* ParseOggVorbis.hpp */,
 			);
 			path = src;
 			sourceTree = "<group>";
