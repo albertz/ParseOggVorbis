@@ -966,9 +966,11 @@ struct VorbisStreamDecodeState {
 			CHECK(pcm_prev_second_half_window_offset < pcm_cur_second_half_window_offset);
 			uint32_t num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
 			std::vector<DataRange<const float>> channelPcms(num_channels);
-			for(uint8_t channel = 0; channel < num_channels; ++channel)
+			for(uint8_t channel = 0; channel < num_channels; ++channel) {
 				channelPcms[channel] = DataRange<const float>(
 					&pcm_buffer[channel][pcm_offset + prev_second_half_window_offset], num_frames);
+				push_data_float(this, "pcm", channel, channelPcms[channel].begin(), channelPcms[channel].size());
+			}
 			CHECK(callbacks.gotPcmData(channelPcms));
 		}
 
@@ -1224,6 +1226,7 @@ struct VorbisPacket {
 			// Actually that should be faster.
 			uint32_t(stream->header.get_blocksize_0()) * 5 + uint32_t(stream->header.get_blocksize_1()) * 5);
 		register_decoder_ref(stream, "ParseOggVorbis", stream->header.audio_sample_rate, stream->header.audio_channels);
+		register_decoder_alias(stream, &stream->decode_state);
 		for(VorbisFloor& floor : stream->setup.floors) {
 			if(floor.floor_type == 1) {
 				VorbisFloor1& floor1 = floor.floor1;

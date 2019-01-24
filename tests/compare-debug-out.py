@@ -54,7 +54,7 @@ def assert_same_list(l1, l2):
         assert y1 == y2, "different at pos %i: %r vs %r" % (i, l1, l2)
 
 
-def assert_close_list(l1, l2, eps=1e-10):
+def assert_close_list(l1, l2, eps=1e-5):
     """
     :param list|tuple l1:
     :param list|tuple l2:
@@ -219,7 +219,7 @@ class Reader:
         self.decoder_sample_rate = self.read_single_int_expect_key("decoder-sample-rate")
         self.decoder_num_channels = self.read_single_int_expect_key("decoder-num-channels")
         self.floors = []  # type: typing.List[Floor1]
-        self.pcm_data = []  # type: typing.List[typing.Tuple[int, typing.Tuple[float, ...]]]
+        self.pcm_data = {}  # type: typing.Dict[int, typing.List[typing.Tuple[float, ...]]]
         self.num_samples = {}  # per channel
 
     def raw_read(self, expect_size=None):
@@ -371,7 +371,7 @@ class Reader:
         :param int channel:
         :param tuple[float] pcm_data: raw samples
         """
-        self.pcm_data.append((channel, pcm_data))
+        self.pcm_data.setdefault(channel, []).append(pcm_data)
         self.num_samples.setdefault(channel, 0)
         self.num_samples[channel] += len(pcm_data)
 
@@ -428,10 +428,28 @@ def main():
             packet2 = reader2.read_audio_packet(dump=args.dump_stdout)
             try:
                 AudioPacket.assert_same(packet1, packet2)
+                assert sorted(reader1.pcm_data.keys()) == sorted(reader2.pcm_data.keys())
+                for channel in sorted(reader1.pcm_data.keys()):
+                    pcms1 = reader1.pcm_data[channel]
+                    pcms2 = reader2.pcm_data[channel]
+                    assert len(pcms1) == len(pcms2)
+                    pcm1 = sum(pcms1, tuple())
+                    pcm2 = sum(pcms2, tuple())
+                    min_len = min(len(pcm1), len(pcm2))
+                    assert_close_list(pcm1[:min_len], pcm2[:min_len])
+                    pcms1.clear()
+                    pcms2.clear()
+                    if len(pcm1) > min_len:
+                        pcms1.append(pcm1)
+                    if len(pcm2) > min_len:
+                        pcms2.append(pcm2)
             except Exception:
-                print("Exception at packet %i." % num_packets)
+                print("Exception at packet %i, num samples %r." % (num_packets, reader1.num_samples))
                 raise
         if packet1.eof:
+            print("EOF")
+            if reader2:
+                assert not reader1.pcm_data and not reader2.pcm_data
             break
         num_packets += 1
     print("Finished.")
