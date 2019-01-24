@@ -58,9 +58,9 @@ int main(int argc, const char** argv) {
 	}
 
 	/* Throw the comments plus a few lines about the bitstream we're decoding */
+	vorbis_info *vi = ov_info(&vf, -1);
 	{
 		char **ptr = ov_comment(&vf, -1)->user_comments;
-		vorbis_info *vi = ov_info(&vf, -1);
 		while(*ptr) {
 			std::cout << *ptr << std::endl;
 			++ptr;
@@ -76,8 +76,11 @@ int main(int argc, const char** argv) {
 	size_t sample_count = 0;
 	bool eof = false;
 	while(!eof) {
+		constexpr int sample_byte_count = 2;
 		int current_section;
-		long ret = ov_read(&vf, pcmout, sizeof(pcmout), 0, 2, 1, &current_section);
+		long ret = ov_read(
+			&vf, pcmout, sizeof(pcmout),
+			BYTE_ORDER == BIG_ENDIAN, sample_byte_count, 1, &current_section);
 		if(ret == 0) {
 			/* EOF */
 			eof = true;
@@ -90,7 +93,7 @@ int main(int argc, const char** argv) {
 		} else {
 			/* we don't bother dealing with sample rate changes, etc, but you'll have to */
 			//fwrite(pcmout, 1, ret, stdout);
-			sample_count += ret / 2 / ov_info(&vf, -1)->channels;
+			sample_count += ret / sample_byte_count / vi->channels;
 		}
 	}
 
