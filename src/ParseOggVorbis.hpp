@@ -133,7 +133,12 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		}
 	};
 	std::vector<Entry> entries_;
-	std::vector<std::pair<int32_t, int32_t>> entries_lookup_;
+	struct EntryLookup {
+		uint32_t next_idx; // if 0, we have codeword. otherwise next immediate is for 0bit, next_idx is for 1bit
+		uint32_t num;
+		EntryLookup(uint32_t next, uint32_t v) : next_idx(next), num(v) {}
+	};
+	std::vector<EntryLookup> entries_lookup_;
 	uint8_t lookup_type_;
 	double minimum_value_;
 	double delta_value_;
@@ -179,9 +184,29 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		CHECK(marker[31] == 0); // underspecified
 
 		// Now build up the codeword lookup.
-		// TODO...
+		entries_lookup_.reserve(entries_.size() * 2);
+		_buildEntriesLookup(0, 0);
 
 		return OkOrError();
+	}
+
+	void _buildEntriesLookup(uint32_t baseCodeword, uint8_t bitOffset) {
+		assert(bitOffset < 32);
+		if(bitOffset > 0) {
+			for(const Entry& entry : entries_) {
+				if(entry.len_ == bitOffset && entry.codeword_ == baseCodeword) {
+					entries_lookup_.push_back(EntryLookup(0, entry.num_));
+					return;
+				}
+			}
+		}
+		uint32_t myLookupIdx = (uint32_t) entries_lookup_.size();
+		entries_lookup_.push_back(EntryLookup(0, 0)); // will write below
+		uint32_t word1 = baseCodeword << 1;
+		uint32_t word2 = word1 | 1;
+		_buildEntriesLookup(word1, bitOffset + 1);
+		entries_lookup_[myLookupIdx].next_idx = (uint32_t) entries_lookup_.size();
+		_buildEntriesLookup(word2, bitOffset + 1);
 	}
 
 	void _buildVQ() {
@@ -303,10 +328,9 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		return OkOrError();
 	}
 
-	uint32_t decodeScalar(BitReader& reader) const {
+	uint32_t decodeScalar_slow(BitReader& reader) const {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 3.2.1.
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codebook.go
-		// TODO could be optimized by codeword lookup tree
 		uint32_t word = 0;
 		for(uint8_t len = 0; len < 32; ++len) {
 			if(len > 0)
@@ -318,6 +342,25 @@ struct VorbisCodebook { // used in VorbisStreamSetup
 		}
 		assert(false); // should not be possible, because we checked in _assignCodewords that we are fully specified
 		return uint32_t(-1);
+	}
+
+	uint32_t decodeScalar_fast(BitReader& reader) const {
+		uint32_t lookupIdx = 0;
+		for(uint8_t len = 0; len < 32; ++len) {
+			if(entries_lookup_[lookupIdx].next_idx == 0)
+				return entries_lookup_[lookupIdx].num;
+			bool curBit = reader.readBitsT<1>();
+			if(!curBit)
+				++lookupIdx;
+			else
+				lookupIdx = entries_lookup_[lookupIdx].next_idx;
+		}
+		assert(false); // should not be possible, because we checked in _assignCodewords that we are fully specified
+		return uint32_t(-1);
+	}
+
+	uint32_t decodeScalar(BitReader& reader) const {
+		return decodeScalar_fast(reader);
 	}
 
 	// Returns vector of size dimensions_, or empty if invalid.
