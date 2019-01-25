@@ -933,8 +933,8 @@ struct VorbisStreamDecodeState {
 	// Data is not returned from the first frame
 
 	std::vector<std::vector<float>> pcm_buffer; // for each channel
-	uint32_t pcm_offset; // where to start adding next
-	uint16_t prev_second_half_window_offset; // offset to pcm_offset
+	uint32_t pcm_offset; // where to start writing next
+	int16_t prev_second_half_window_offset; // offset to pcm_offset. can be negative
 	uint32_t prev_win_size, cur_win_size;
 	uint64_t abs_pos;
 	int64_t expected_ending_pos;
@@ -1037,8 +1037,7 @@ struct VorbisStreamDecodeState {
 			}
 			next_pcm_offset = 0;
 		}
-		CHECK(pcm_cur_second_half_window_offset >= next_pcm_offset);
-		prev_second_half_window_offset = pcm_cur_second_half_window_offset - next_pcm_offset;
+		prev_second_half_window_offset = int16_t(int32_t(pcm_cur_second_half_window_offset) - int32_t(next_pcm_offset));
 		pcm_offset = next_pcm_offset;
 		return OkOrError();
 	}
