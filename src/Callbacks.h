@@ -2,7 +2,7 @@
 //  Callbacks.h
 //  ParseOggVorbis
 //
-//  Created by i6user on 21.01.19.
+//  Created by Albert Zeyer on 21.01.19.
 //  Copyright © 2019 Albert Zeyer. All rights reserved.
 //
 

@@ -2,7 +2,7 @@
 //  ParseOggVorbis.hpp
 //  ParseOggVorbis
 //
-//  Created by i6user on 24.01.19.
+//  Created by Albert Zeyer on 24.01.19.
 //  Copyright © 2019 Albert Zeyer. All rights reserved.
 //
 
