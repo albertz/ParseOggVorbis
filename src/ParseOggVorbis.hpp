@@ -1151,6 +1151,7 @@ struct VorbisStream {
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			DataRange<float> residue_data(residue_outputs[channel]);
 			CHECK(mdct.n == residue_data.size() * 2);
+			CHECK(mdct.n == mode.blocksize); // cur window size
 			mdct.backward(residue_data.begin(), pcm.data());
 			push_data_float(this, "pcm_after_mdct", channel, pcm.data(), pcm.size());
 			// overlap/add data
@@ -1161,6 +1162,7 @@ struct VorbisStream {
 
 		// cache right hand data & return finished audio data
 		{
+			// TODO: blocksize, number of frames?
 			uint16_t blocksize0 = header.get_blocksize_0();
 			uint16_t blocksize1 = header.get_blocksize_1();
 			CHECK_ERR(state.advancePcmOffset(
