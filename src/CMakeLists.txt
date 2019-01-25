@@ -1,5 +1,7 @@
 file(GLOB SRC
     "*.h"
+    "*.hpp"
+    "*.c"
     "*.cpp"
 )
 
