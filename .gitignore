@@ -11,6 +11,7 @@ cmake_install.cmake
 /Makefile
 /src/Makefile
 CMakeLists.txt.user
+/src/ParseOggVorbis
 
 .kdev4
 *.kdev4
