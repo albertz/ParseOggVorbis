@@ -1192,6 +1192,12 @@ struct VorbisPacket {
 		VorbisIdHeader& header = stream->header;
 		memcpy(&header, &data[7], sizeof(VorbisIdHeader));
 		CHECK(header.framing_flag == 1);
+		CHECK(header.vorbis_version == 0); // Vorbis I
+		// allowed blocksizes: 64, 128, 256, 512, 1024, 2048, 4096 and 8192 in Vorbis I.
+		CHECK(64 <= header.get_blocksize_0() && header.get_blocksize_0() <= 8192);
+		CHECK(64 <= header.get_blocksize_1() && header.get_blocksize_1() <= 8192);
+		// [blocksize_0] must be less than or equal to [blocksize_1]
+		CHECK(header.get_blocksize_0() <= header.get_blocksize_1());
 		CHECK(callbacks.gotHeader(header));
 		return OkOrError();
 	}
