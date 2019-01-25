@@ -83,7 +83,9 @@ vorbis_intern_h_files = [
 
 def copy_to_standalone():
     os.makedirs(standalone_dir, exist_ok=True)
-    copy_file_list = []
+    copy_file_list = []  # (src,dst)
+    for fn in ["COPYING"]:
+        copy_file_list += [("%s/%s" % (libvorbis_dir, fn), "%s/%s" % (standalone_dir, fn))]
     for fn in ogg_c_files:
         copy_file_list += [(fn, "%s/ogg_%s" % (standalone_dir, os.path.basename(fn)))]
     for fn in vorbis_c_files:
@@ -108,16 +110,18 @@ def compile_direct():
     cmd += ["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir]
     cmd += ogg_c_files
     cmd += vorbis_c_files
-    cmd += ["libvorbis-demo.c"]
+    # TODO need to split cc/c++...
+    cmd += ["libvorbis-demo.cpp"]
     check_call(cmd)
 
 
 def compile_standalone():
     copy_to_standalone()
     cmd = ["cc"]
-    cmd += ["-I", standalone_dir]
+    cmd += ["-I", standalone_dir, "-I", "../src"]
     cmd += glob("%s/*.c" % standalone_dir)
-    cmd += ["libvorbis-demo.c"]
+    # TODO need to split cc/c++...
+    cmd += ["libvorbis-demo.cpp"]
     check_call(cmd)
 
 
