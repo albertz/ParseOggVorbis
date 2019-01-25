@@ -936,13 +936,13 @@ struct VorbisStreamDecodeState {
 	uint32_t pcm_offset; // where to start writing next
 	int16_t prev_second_half_window_offset; // offset to pcm_offset. can be negative
 	uint32_t prev_win_size, cur_win_size;
-	uint64_t abs_pos;
-	int64_t expected_ending_pos;
+	uint64_t abs_total_pos;
+	int64_t expected_ending_total_pos;
 
 	VorbisStreamDecodeState() :
 	pcm_offset(0), prev_second_half_window_offset(0),
 	prev_win_size(0), cur_win_size(0),
-	abs_pos(0), expected_ending_pos(0) {}
+	abs_total_pos(0), expected_ending_total_pos(0) {}
 
 	void init(uint8_t num_channels, uint32_t pcm_buffer_size) {
 		pcm_buffer.resize(num_channels);
@@ -976,11 +976,11 @@ struct VorbisStreamDecodeState {
 			CHECK(pcm_prev_second_half_window_offset < pcm_cur_second_half_window_offset);
 			num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
 		}
-		if(expected_ending_pos >= 0) {
-			CHECK(abs_pos <= expected_ending_pos);
-			CHECK(abs_pos + num_frames >= expected_ending_pos);
+		if(expected_ending_total_pos >= 0) {
+			CHECK(abs_total_pos <= expected_ending_total_pos);
+			CHECK(abs_total_pos + num_frames >= expected_ending_total_pos);
 			// If this is the last packet, maybe need to shorten num_frames.
-			num_frames = uint32_t(expected_ending_pos - abs_pos);
+			num_frames = uint32_t(expected_ending_total_pos - abs_total_pos);
 		}
 		if(num_frames > 0) {
 			uint8_t num_channels = pcm_buffer.size();
@@ -991,10 +991,10 @@ struct VorbisStreamDecodeState {
 				push_data_float(this, "pcm", channel, channelPcms[channel].begin(), channelPcms[channel].size());
 			}
 			CHECK(callbacks.gotPcmData(channelPcms));
-			abs_pos += num_frames;
+			abs_total_pos += num_frames;
 		}
-		if(expected_ending_pos >= 0)
-			CHECK(abs_pos == expected_ending_pos);
+		if(expected_ending_total_pos >= 0)
+			CHECK(abs_total_pos == uint64_t(expected_ending_total_pos));
 		return OkOrError();
 	}
 
@@ -1043,7 +1043,7 @@ struct VorbisStreamDecodeState {
 	}
 
 	void setExpectedEndingPos(int64_t pos) {
-		expected_ending_pos = pos;
+		expected_ending_total_pos = pos;
 	}
 
 };
