@@ -5,6 +5,7 @@ import sys
 from subprocess import check_call
 import argparse
 import shutil
+import tempfile
 from glob import glob
 
 import better_exchook
@@ -13,6 +14,7 @@ better_exchook.install()
 libvorbis_dir = "libvorbis-1.3.6"
 libogg_dir = "libogg-1.3.3"
 standalone_dir = "libvorbis-standalone"
+src_dir = "../src"
 
 
 def call(args):
@@ -105,34 +107,62 @@ def copy_to_standalone():
         shutil.copy(src, dst)
 
 
+def _compile(src_files, common_opts, out_filename):
+    """
+    :param list[str] src_files:
+    :param list[str] common_opts:
+    :param str out_filename:
+    """
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        used_cpp = False
+        for fn in src_files:
+            is_c = fn.endswith(".c")
+            if not is_c:
+                assert fn.endswith(".cpp")
+                used_cpp = True
+            call(
+                ["cc" if is_c else "c++", "-c", "-std=c99" if is_c else "-std=c++11"] +
+                common_opts +
+                [fn, "-o", "%s/%s.o" % (tmp_dir, os.path.basename(fn))])
+        o_files = glob("%s/*.o" % tmp_dir)
+        call(["c++" if used_cpp else "cc"] + o_files + ["-o", out_filename])
+    finally:
+        shutil.rmtree(tmp_dir)
+
+
 def compile_direct():
-    cmd = ["cc"]
-    cmd += ["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir]
-    cmd += ogg_c_files
-    cmd += vorbis_c_files
-    # TODO need to split cc/c++...
-    cmd += ["libvorbis-demo.cpp"]
-    check_call(cmd)
+    _compile(
+        src_files=ogg_c_files + vorbis_c_files + ["libvorbis-demo.cpp", "%s/Callbacks.cpp" % src_dir],
+        common_opts=["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir, "-I", src_dir],
+        out_filename="libvorbis-direct.bin")
 
 
 def compile_standalone():
     copy_to_standalone()
-    cmd = ["cc"]
-    cmd += ["-I", standalone_dir, "-I", "../src"]
-    cmd += glob("%s/*.c" % standalone_dir)
-    # TODO need to split cc/c++...
-    cmd += ["libvorbis-demo.cpp"]
-    check_call(cmd)
+    _compile(
+        src_files=glob("%s/*.c" % standalone_dir) + ["libvorbis-demo.cpp", "%s/Callbacks.cpp" % src_dir],
+        common_opts=["-I", standalone_dir, "-I", src_dir],
+        out_filename="libvorbis-standalone.bin")
+
+
+def compile_ours():
+    _compile(
+        src_files=glob("%s/*.c*" % src_dir),
+        common_opts=["-I", src_dir],
+        out_filename="ours.bin")
 
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--mode", required=True, help="direct or copy")
+    argparser.add_argument("--mode", required=True, help="direct or standalone or ours")
     args = argparser.parse_args()
     if args.mode == "direct":
         compile_direct()
     elif args.mode == "standalone":
         compile_standalone()
+    elif args.mode == "ours":
+        compile_ours()
     else:
         raise Exception("invalid mode %r" % args.mode)
 
