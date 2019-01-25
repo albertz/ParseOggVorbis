@@ -443,6 +443,10 @@ def main():
                         pcms1.append(pcm1)
                     if len(pcm2) > min_len:
                         pcms2.append(pcm2)
+                    if not pcms1:
+                        del reader1.pcm_data[channel]
+                    if not pcms2:
+                        del reader2.pcm_data[channel]
             except Exception:
                 print("Exception at packet %i, num samples %r." % (num_packets, reader1.num_samples))
                 raise
