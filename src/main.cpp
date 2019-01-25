@@ -12,6 +12,9 @@
 #include "Callbacks.h"
 
 struct MyParseCallbacks : ParseCallbacks {
+	uint64_t sample_count;
+	MyParseCallbacks() : sample_count(0) {}
+
 	virtual bool gotHeader(const VorbisIdHeader& header) {
 		std::cout
 		<< "Header: vorbis version: " << header.vorbis_version
@@ -31,10 +34,12 @@ struct MyParseCallbacks : ParseCallbacks {
 		return true;
 	}
 	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) {
+		assert(channelPcms.size() > 0);
+		sample_count += channelPcms[0].size();
 		return true;
 	}
 	virtual bool gotEof() {
-		std::cout << "got eof" << std::endl;
+		std::cout << "got eof. sample count: " << sample_count << std::endl;
 		return true;
 	}
 };

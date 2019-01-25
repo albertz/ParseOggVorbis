@@ -962,10 +962,10 @@ struct VorbisStreamSetup { // used in VorbisStream
 
 struct ParseCallbacks {
 	// Returning false means to stop.
-	virtual bool gotHeader(const VorbisIdHeader& header) { return true; }
+	virtual bool gotHeader(const VorbisIdHeader& header) { (void) header; return true; }
 	// TODO gotComments ...
-	virtual bool gotSetup(const VorbisStreamSetup& setup) { return true; }
-	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) { return true; }
+	virtual bool gotSetup(const VorbisStreamSetup& setup) { (void) setup; return true; }
+	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) { (void) channelPcms; return true; }
 	virtual bool gotEof() { return true; }
 };
 
@@ -1021,8 +1021,8 @@ struct VorbisStreamDecodeState {
 			num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
 		}
 		if(expected_ending_total_pos >= 0) {
-			CHECK(abs_total_pos <= expected_ending_total_pos);
-			CHECK(abs_total_pos + num_frames >= expected_ending_total_pos);
+			CHECK(abs_total_pos <= uint64_t(expected_ending_total_pos));
+			CHECK(abs_total_pos + num_frames >= uint64_t(expected_ending_total_pos));
 			// If this is the last packet, maybe need to shorten num_frames.
 			num_frames = uint32_t(expected_ending_total_pos - abs_total_pos);
 		}
@@ -1284,7 +1284,7 @@ struct VorbisPacket {
 		CHECK(type == 3);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
 		// ignore for now...
-		// TODO...
+		(void) callbacks; // TODO...
 		return OkOrError();
 	}
 

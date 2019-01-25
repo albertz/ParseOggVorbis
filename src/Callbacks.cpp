@@ -61,10 +61,10 @@ struct ItToPtrTraits {
 template<typename It>
 struct ItToPtrTraits<It> {
 	typedef typename std::iterator_traits<It>::value_type value_type;
-	static bool is_null(const It& it) {
+	static bool is_null(const It&) {
 		return false;
 	}
-	static const value_type* const_cast_to_ptr_or_null(const It& it) {
+	static const value_type* const_cast_to_ptr_or_null(const It&) {
 		return nullptr;
 	}
 };
@@ -155,7 +155,7 @@ struct Info {
 	template<typename T> // e.g. int, bool, etc
 	void write_to_file(const std::string& key, const T& value) {
 		typedef typename TypeInfo<T>::raw_type raw_type; // make sure that T is a valid type
-		write_to_file(key, &value, &value + 1);
+		write_to_file(key, (const raw_type*) &value, &value + 1);
 	}
 
 	void write_to_file(const std::string& key, const std::string& value_str) {
@@ -248,7 +248,6 @@ void push_data_short_stdout_T(Info& info, const char* name, int channel, It data
 
 template<typename It>
 void push_data_file_T(Info& info, const char* name, int channel, const It& data, const It& end) {
-	typedef typename std::iterator_traits<It>::value_type T;
 	assert(info.output_file);
 	info.write_to_file("entry-name", name);
 	if(channel >= 0)
@@ -297,7 +296,7 @@ extern "C" const char* generic_itoa(uint32_t val, int base, int len) {
 		len = sizeof(val) * 8;  // TODO this is just for base=2...
 	static char rep[] = "0123456789abcdef";
 	static char buf[33];
-	assert(len + 1 <= sizeof(buf));
+	assert(unsigned(len + 1) <= sizeof(buf));
 	char *ptr = &buf[sizeof(buf) - 1];
 	*ptr = '\0';
 	if(val == 0)

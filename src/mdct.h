@@ -112,11 +112,11 @@ extern void mdct_backward(const mdct_lookup *init, const DATA_TYPE *in, DATA_TYP
 
 struct Mdct {
 	bool _initialized;
-	int n;
+	unsigned int n;
 	mdct_lookup l;
 	Mdct() : _initialized(false), n(0) {}
 	~Mdct() { if(_initialized) mdct_clear(&l); }
-	void init(int n) {
+	void init(unsigned int n) {
 		assert(!_initialized);
 		this->n = n;
 		mdct_init(&l, n);
