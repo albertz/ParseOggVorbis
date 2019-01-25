@@ -926,11 +926,19 @@ struct ParseCallbacks {
 };
 
 struct VorbisStreamDecodeState {
+	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
+	// 1.3.2. Decode Procedure
+	// finished: audio between center of the previous frame and the center of the current frame
+	// amount: window_blocksize(previous_window)/4+window_blocksize(current_window)/4 (doc wrong?)
+	// Data is not returned from the first frame
+
 	std::vector<std::vector<float>> pcm_buffer; // for each channel
 	uint32_t pcm_offset; // where to start adding next
 	uint16_t prev_second_half_window_offset; // offset to pcm_offset
+	uint32_t prev_win_size, cur_win_size;
 
-	VorbisStreamDecodeState() : pcm_offset(0), prev_second_half_window_offset(0) {}
+	VorbisStreamDecodeState() : pcm_offset(0), prev_second_half_window_offset(0), prev_win_size(0), cur_win_size(0) {}
+
 	void init(uint8_t num_channels, uint32_t pcm_buffer_size) {
 		pcm_buffer.resize(num_channels);
 		size_t capacity = 0;
@@ -943,6 +951,7 @@ struct VorbisStreamDecodeState {
 		for(uint8_t i = 0; i < num_channels; ++i)
 			pcm_buffer[i].resize(capacity);
 	}
+
 	OkOrError addPcmFrame(uint8_t channel, DataRange<const float> new_pcm, DataRange<const float> window) {
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 		// 1.3.2. Decode Procedure
@@ -953,27 +962,36 @@ struct VorbisStreamDecodeState {
 			pcm_buffer[channel][pcm_offset + i] += new_pcm[i] * window[i];
 		return OkOrError();
 	}
-	OkOrError advancePcmOffset(ParseCallbacks& callbacks, uint32_t prev_win_size, uint32_t cur_win_size, uint32_t next_win_size) {
-		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
-		// 1.3.2. Decode Procedure
-		// finished: audio between center of the previous frame and the center of the current frame
-		// amount: window_blocksize(previous_window)/4+window_blocksize(current_window)/4 (doc wrong?)
-		// Data is not returned from the first frame
-		uint8_t num_channels = pcm_buffer.size();
-		uint32_t pcm_cur_second_half_window_offset = pcm_offset + cur_win_size / 2;
+
+	OkOrError forwardReadyPcm(ParseCallbacks& callbacks) {
 		if(prev_win_size > 0) {
+			uint8_t num_channels = pcm_buffer.size();
+			uint32_t pcm_cur_second_half_window_offset = pcm_offset + cur_win_size / 2;
 			uint32_t pcm_prev_second_half_window_offset = pcm_offset + prev_second_half_window_offset;
 			CHECK(pcm_prev_second_half_window_offset < pcm_cur_second_half_window_offset);
 			uint32_t num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
 			std::vector<DataRange<const float>> channelPcms(num_channels);
 			for(uint8_t channel = 0; channel < num_channels; ++channel) {
-				channelPcms[channel] = DataRange<const float>(
-					&pcm_buffer[channel][pcm_offset + prev_second_half_window_offset], num_frames);
+				channelPcms[channel] =
+					DataRange<const float>(&pcm_buffer[channel][pcm_offset + prev_second_half_window_offset], num_frames);
 				push_data_float(this, "pcm", channel, channelPcms[channel].begin(), channelPcms[channel].size());
 			}
 			CHECK(callbacks.gotPcmData(channelPcms));
 		}
+		return OkOrError();
+	}
 
+	OkOrError advancePcmOffsetBeginAudioPacket(uint32_t cur_win_size) {
+		if(this->cur_win_size > 0) // prev win size
+			CHECK_ERR(_advancePcmOffset(cur_win_size));
+		prev_win_size = this->cur_win_size;
+		this->cur_win_size = cur_win_size;
+		return OkOrError();
+	}
+
+	OkOrError _advancePcmOffset(uint32_t next_win_size) {
+		uint8_t num_channels = pcm_buffer.size();
+		uint32_t pcm_cur_second_half_window_offset = pcm_offset + cur_win_size / 2;
 		int32_t next_pcm_offset = int32_t(pcm_offset) + (int32_t(cur_win_size) / 4) * 3 - (int32_t(next_win_size) / 4) * 1;
 		// Check whether we need to move the data to have enough room for the next window.
 		// We need to keep cur_win_size / 2 of the recent frames.
@@ -994,11 +1012,11 @@ struct VorbisStreamDecodeState {
 		}
 		else if(next_pcm_offset < 0) { // possible if short window and next is long window
 			uint32_t extra_room_needed = uint32_t(-next_pcm_offset);
-			CHECK(extra_room_needed > pcm_offset); // expect to move to the right
+			// Move to the right.
 			pcm_cur_second_half_window_offset += extra_room_needed;
 			for(uint8_t channel = 0; channel < num_channels; ++channel) {
-				memmove(&pcm_buffer[channel][extra_room_needed], &pcm_buffer[channel][pcm_offset], cur_win_size * sizeof(float));
-				memset(&pcm_buffer[channel][0], 0, extra_room_needed * sizeof(float));
+				memmove(&pcm_buffer[channel][pcm_offset + extra_room_needed], &pcm_buffer[channel][pcm_offset], cur_win_size * sizeof(float));
+				memset(&pcm_buffer[channel][0], 0, (pcm_offset + extra_room_needed) * sizeof(float));
 			}
 			next_pcm_offset = 0;
 		}
@@ -1007,6 +1025,7 @@ struct VorbisStreamDecodeState {
 		pcm_offset = next_pcm_offset;
 		return OkOrError();
 	}
+
 };
 
 struct VorbisStream {
@@ -1038,17 +1057,18 @@ struct VorbisStream {
 		int mode_idx = reader.readBits<uint16_t>(highest_bit(setup.modes.size() - 1));
 		const VorbisModeNumber& mode = setup.modes[mode_idx];
 		const VorbisMapping& mapping = setup.mappings[mode.mapping];
-		bool prev_window_flag = false, next_window_flag = false;
-		if(mode.block_flag) {
+		bool prev_window_flag = false, next_window_flag = false; // Note: Only set if we are a long window.
+		if(mode.block_flag) { // This mode is a long window.
 			prev_window_flag = reader.readBitsT<1>();
 			next_window_flag = reader.readBitsT<1>();
 		}
 		DataRange<const float> window = mode.getWindow(prev_window_flag, next_window_flag);
 		CHECK((window.size() >> 16) == 0); // window size should fit in uint16_t
-		std::vector<float> floor_outputs(window.size() * header.audio_channels);
-		std::vector<bool> floor_output_used(header.audio_channels);
+		CHECK_ERR(state.advancePcmOffsetBeginAudioPacket((uint32_t) window.size()));
 
 		// 4.3.2. floor curve decode
+		std::vector<float> floor_outputs(window.size() * header.audio_channels);
+		std::vector<bool> floor_output_used(header.audio_channels);
 		for(uint8_t channel = 0; channel < header.audio_channels; ++channel) {
 			uint8_t submap_number = mapping.muxs[channel];
 			uint8_t floor_number = mapping.submaps[submap_number].floor;
@@ -1159,18 +1179,7 @@ struct VorbisStream {
 		}
 
 		push_data_u8(this, "finish_audio_packet", -1, nullptr, 0);
-
-		// cache right hand data & return finished audio data
-		{
-			// TODO: blocksize, number of frames?
-			uint16_t blocksize0 = header.get_blocksize_0();
-			uint16_t blocksize1 = header.get_blocksize_1();
-			CHECK_ERR(state.advancePcmOffset(
-				callbacks,
-				(audio_packet_counts_ > 0) ? (prev_window_flag ? blocksize1 : blocksize0) : 0,
-				mode.blocksize,
-				next_window_flag ? blocksize1 : blocksize0));
-		}
+		CHECK_ERR(state.forwardReadyPcm(callbacks));
 
 		return OkOrError();
 	}
