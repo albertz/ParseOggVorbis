@@ -6,6 +6,14 @@
 //  Copyright © 2019 Albert Zeyer. All rights reserved.
 //
 
+/*
+ This file was intended to provide simple hooks into existing code.
+ We patched libvorbis with a few calls to these hook functions to extract certain
+ intermedia decode information/state, see `tests/libvorbis-standalone`.
+ We also added similar hooks to our own implementation, to allow for an easy comparison.
+ This is being tested by `tests/compare-debug-out.py`.
+ */
+
 #ifndef Callbacks_h
 #define Callbacks_h
 
