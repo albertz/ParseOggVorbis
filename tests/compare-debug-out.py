@@ -9,6 +9,11 @@ import subprocess
 import os
 
 
+my_dir = os.path.dirname(__file__) or "."
+default_ours_exec = "%s/ours.bin" % my_dir
+default_libvorbis_exec = "%s/libvorbis-standalone.bin" % my_dir
+
+
 def create_debug_out(exec_path, ogg_filename):
     """
     :param str exec_path: either to libvorbis-standalone or our own tool (ParseOggVorbis)
@@ -388,12 +393,19 @@ def main():
     args = arg_parser.parse_args()
 
     if args.ogg:
-        assert args.ourexec and not args.ourout
+        assert not args.ourout, "--ogg xor --ourout.\n%s" % arg_parser.format_usage()
+        if args.ourexec is None:
+            assert os.path.exists(default_ours_exec), "run `compile-libvorbis.py --mode ours`"
+            args.ourexec = default_ours_exec
         args.ourout = create_debug_out(args.ourexec, args.ogg)
+        if args.libvorbisexec is None:
+            assert os.path.exists(default_libvorbis_exec), "run `compile-libvorbis.py --mode standalone`"
+            args.libvorbisexec = default_libvorbis_exec
         if args.libvorbisexec:
             assert not args.libvorbisout
             args.libvorbisout = create_debug_out(args.libvorbisexec, args.ogg)
 
+    assert args.ourout, "need --ourout.\n%s" % arg_parser.format_usage()
     reader1 = Reader(args.ourout)
     print("Read our (ParseOggVorbis) debug out file:", reader1.filename)
     print("Our decoder name:", reader1.decoder_name)
