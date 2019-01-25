@@ -23,6 +23,12 @@ struct MyParseCallbacks : ParseCallbacks {
 		<< std::endl;
 		return true;
 	}
+	virtual bool gotComments(const std::string& vendor, const std::vector<std::string> comments) {
+		std::cout << "Vendor: " << vendor << std::endl;
+		for(const std::string& comment : comments)
+			std::cout << "Comment: " << comment << std::endl;
+		return true;
+	}
 	virtual bool gotSetup(const VorbisStreamSetup& setup) {
 		std::cout
 		<< "Setup: num codebooks: " << setup.codebooks.size()

@@ -963,7 +963,7 @@ struct VorbisStreamSetup { // used in VorbisStream
 struct ParseCallbacks {
 	// Returning false means to stop.
 	virtual bool gotHeader(const VorbisIdHeader& header) { (void) header; return true; }
-	// TODO gotComments ...
+	virtual bool gotComments(const std::string& vendor, const std::vector<std::string> comments) { (void) vendor; (void) comments; return true; }
 	virtual bool gotSetup(const VorbisStreamSetup& setup) { (void) setup; return true; }
 	virtual bool gotPcmData(const std::vector<DataRange<const float>>& channelPcms) { (void) channelPcms; return true; }
 	virtual bool gotEof() { return true; }
@@ -1278,13 +1278,39 @@ struct VorbisPacket {
 	OkOrError parse_comment(ParseCallbacks& callbacks) {
 		// https://xiph.org/vorbis/doc/v-comment.html
 		// https://xiph.org/vorbis/doc/Vorbis_I_spec.html 4.2.3
+		// 5. comment field and header specification
 		// Meta tags, etc.
 		CHECK(data_len >= 16);
 		uint8_t type = data[0];
 		CHECK(type == 3);
 		CHECK(memcmp(&data[1], "vorbis", 6) == 0);
-		// ignore for now...
-		(void) callbacks; // TODO...
+		size_t offset = 7;
+		CHECK(offset + 4 <= data_len);
+		uint32_t vendor_len = *(uint32_t*)(data + offset);
+		endian_swap_to_little_endian(vendor_len);
+		offset += 4;
+		CHECK(offset + vendor_len <= data_len);
+		std::string vendor((const char*)data + offset, vendor_len);
+		offset += vendor_len;
+		CHECK(offset + 4 <= data_len);
+		uint32_t user_comment_list_len = *(uint32_t*)(data + offset);
+		endian_swap_to_little_endian(user_comment_list_len);
+		CHECK(offset + user_comment_list_len * 4 < data_len);
+		std::vector<std::string> comments(user_comment_list_len);
+		offset += 4;
+		for(uint32_t i = 0; i < user_comment_list_len; ++i) {
+			CHECK(offset + 4 <= data_len);
+			uint32_t comment_len = *(uint32_t*)(data + offset);
+			endian_swap_to_little_endian(comment_len);
+			offset += 4;
+			CHECK(offset + comment_len <= data_len);
+			comments[i] = std::string((const char*)data + offset, comment_len);
+			offset += comment_len;
+		}
+		// check framing
+		CHECK(offset + 1 == data_len);
+		CHECK(data[offset] == 1);
+		CHECK(callbacks.gotComments(vendor, comments));
 		return OkOrError();
 	}
 
