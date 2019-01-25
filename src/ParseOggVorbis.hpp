@@ -936,8 +936,13 @@ struct VorbisStreamDecodeState {
 	uint32_t pcm_offset; // where to start adding next
 	uint16_t prev_second_half_window_offset; // offset to pcm_offset
 	uint32_t prev_win_size, cur_win_size;
+	uint64_t abs_pos;
+	int64_t expected_ending_pos;
 
-	VorbisStreamDecodeState() : pcm_offset(0), prev_second_half_window_offset(0), prev_win_size(0), cur_win_size(0) {}
+	VorbisStreamDecodeState() :
+	pcm_offset(0), prev_second_half_window_offset(0),
+	prev_win_size(0), cur_win_size(0),
+	abs_pos(0), expected_ending_pos(0) {}
 
 	void init(uint8_t num_channels, uint32_t pcm_buffer_size) {
 		pcm_buffer.resize(num_channels);
@@ -964,12 +969,21 @@ struct VorbisStreamDecodeState {
 	}
 
 	OkOrError forwardReadyPcm(ParseCallbacks& callbacks) {
+		uint32_t num_frames = 0;
 		if(prev_win_size > 0) {
-			uint8_t num_channels = pcm_buffer.size();
 			uint32_t pcm_cur_second_half_window_offset = pcm_offset + cur_win_size / 2;
 			uint32_t pcm_prev_second_half_window_offset = pcm_offset + prev_second_half_window_offset;
 			CHECK(pcm_prev_second_half_window_offset < pcm_cur_second_half_window_offset);
-			uint32_t num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
+			num_frames = pcm_cur_second_half_window_offset - pcm_prev_second_half_window_offset;
+		}
+		if(expected_ending_pos >= 0) {
+			CHECK(abs_pos <= expected_ending_pos);
+			CHECK(abs_pos + num_frames >= expected_ending_pos);
+			// If this is the last packet, maybe need to shorten num_frames.
+			num_frames = uint32_t(expected_ending_pos - abs_pos);
+		}
+		if(num_frames > 0) {
+			uint8_t num_channels = pcm_buffer.size();
 			std::vector<DataRange<const float>> channelPcms(num_channels);
 			for(uint8_t channel = 0; channel < num_channels; ++channel) {
 				channelPcms[channel] =
@@ -977,7 +991,10 @@ struct VorbisStreamDecodeState {
 				push_data_float(this, "pcm", channel, channelPcms[channel].begin(), channelPcms[channel].size());
 			}
 			CHECK(callbacks.gotPcmData(channelPcms));
+			abs_pos += num_frames;
 		}
+		if(expected_ending_pos >= 0)
+			CHECK(abs_pos == expected_ending_pos);
 		return OkOrError();
 	}
 
@@ -1024,6 +1041,10 @@ struct VorbisStreamDecodeState {
 		prev_second_half_window_offset = pcm_cur_second_half_window_offset - next_pcm_offset;
 		pcm_offset = next_pcm_offset;
 		return OkOrError();
+	}
+
+	void setExpectedEndingPos(int64_t pos) {
+		expected_ending_pos = pos;
 	}
 
 };
@@ -1324,6 +1345,10 @@ struct OggReader {
 				packet.stream = &stream;
 				packet.data = buffer_page_.data + offset;
 				packet.data_len = len;
+				if(segment_i == buffer_page_.header.page_segments_num - 1)
+					stream.decode_state.setExpectedEndingPos(buffer_page_.header.absolute_granule_pos);
+				else
+					stream.decode_state.setExpectedEndingPos(-1);
 				if(stream.packet_counts_ == 0)
 					CHECK_ERR(packet.parse_id(callbacks_));
 				else if(stream.packet_counts_ == 1)
