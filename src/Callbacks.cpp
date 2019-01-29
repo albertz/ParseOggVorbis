@@ -14,6 +14,7 @@
 #include <iostream>
 #include <type_traits>
 #include <iterator>
+#include <assert.h>
 
 
 typedef float float32_t;
