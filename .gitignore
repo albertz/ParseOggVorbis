@@ -1,4 +1,8 @@
 /build
+*.so
+*.dylib
+__pycache__
+
 # Either ignore the whole Xcode project, or just some stuff from it. Maybe still usefull.
 # *.xcodeproj
 project.xcworkspace
@@ -20,4 +24,3 @@ CMakeLists.txt.user
 /audio-examples
 
 .DS_Store
-
