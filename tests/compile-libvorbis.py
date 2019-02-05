@@ -22,8 +22,6 @@ def call(args):
     check_call(args)
 
 
-assert os.path.exists(libvorbis_dir)
-assert os.path.exists(libogg_dir)
 
 ogg_c_files = [
     "bitwise.c",
@@ -157,14 +155,9 @@ def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--mode", required=True, help="direct or standalone or ours")
     args = argparser.parse_args()
-    if args.mode == "direct":
-        compile_direct()
-    elif args.mode == "standalone":
-        compile_standalone()
-    elif args.mode == "ours":
-        compile_ours()
-    else:
-        raise Exception("invalid mode %r" % args.mode)
+    compile_modes = {"direct": compile_direct, "standalone": compile_standalone, "ours": compile_ours}
+    assert args.mode in compile_modes, "invalid mode %r, available modes: %r" % (args.mode, list(compile_modes.keys()))
+    compile_modes[args.mode]()
 
 
 if __name__ == "__main__":
