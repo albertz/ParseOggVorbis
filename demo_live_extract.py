@@ -89,7 +89,6 @@ class _BackgroundReader(Thread):
             while True:
                 buf = os.read(self.read_fd, 1024 * 1024)
                 if not buf:
-                    print("Finished reading.")
                     break
                 self.buffer.write(buf)
         except Exception:
@@ -239,13 +238,17 @@ class CallbacksOutputReader:
 def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument("file")
+    arg_parser.add_argument(
+        "--filter", nargs="*", default=["floor1_unpack multiplier", "floor1_unpack xs", "floor_number", "floor1 ys"])
     args = arg_parser.parse_args()
+
     raw_bytes_in_memory_value = open(args.file, "rb").read()
 
     lib = ParseOggVorbisLib()
 
-    print("set_data_filter")
-    lib.set_data_filter(["floor1_unpack multiplier", "floor1_unpack xs", "floor1 ys"])
+    if args.filter:
+        print("set_data_filter:", args.filter)
+        lib.set_data_filter(args.filter)
 
     reader = lib.decode_ogg_vorbis(raw_bytes_in_memory_value)
 
