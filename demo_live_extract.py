@@ -10,6 +10,7 @@ import io
 import struct
 import typing
 from collections import defaultdict
+import numpy
 
 
 class ParseOggVorbisLib:
@@ -235,12 +236,53 @@ class CallbacksOutputReader:
             data_repr = repr(list(data))
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
+    def read_floor_ys(self, truncate_to_smaller=True):
+        """
+        :param bool truncate_to_smaller: dim will be the smaller floor mode
+        :return: float values in [-1,1], shape (time,dim)
+        :rtype: numpy.ndarray
+        """
+        assert truncate_to_smaller, "onluy this is implemented currently"
+        floor_multipliers = []
+        floor_xs = []
+        while True:
+            name, channel, data = self.read_entry()
+            if name == "floor1_unpack multiplier":
+                assert len(data) == 1
+                floor_multipliers.append(data[0])
+            if name == "floor1_unpack xs":
+                floor_xs.append(data)
+            if name == "finish_setup":
+                break
+        assert len(floor_multipliers) == len(floor_xs) > 0
+        dim = min([len(xs) for xs in floor_xs])
+        recent_floor_number = None
+        res_int = numpy.zeros((0, dim), dtype="uint8")  # values [0..255]
+        while True:
+            try:
+                name, channel, data = self.read_entry()
+            except EOFError:
+                break
+            if name == "floor_number":
+                recent_floor_number = data[0]
+                assert 0 <= recent_floor_number < len(floor_xs)
+            if name in {"floor1 ys", "floor1 final_ys"}:
+                assert len(data) == len(floor_xs[recent_floor_number])
+                res_int = numpy.concatenate(
+                    [res_int, numpy.array(data[:dim], dtype="uint8")[None, :] * floor_multipliers[recent_floor_number]],
+                    axis=0)
+        res_float = (res_int.astype("float32") - 127.5) / 127.5
+        return res_float
+
 
 def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument("file")
     arg_parser.add_argument(
-        "--filter", nargs="*", default=["floor1_unpack multiplier", "floor1_unpack xs", "floor_number", "floor1 ys"])
+        "--filter", nargs="*", default=[
+            "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+            "floor_number", "floor1 final_ys", "finish_audio_packet"])
+    arg_parser.add_argument("--mode", default="dump")
     args = arg_parser.parse_args()
 
     raw_bytes_in_memory_value = open(args.file, "rb").read()
@@ -252,17 +294,27 @@ def main():
         lib.set_data_filter(args.filter)
 
     reader = lib.decode_ogg_vorbis(raw_bytes_in_memory_value)
-    entry_name_counts = defaultdict(int)
 
-    while True:
-        try:
-            name, channel, data = reader.read_entry()
-        except EOFError:
-            break
-        entry_name_counts[name] += 1
-        reader.dump_entry(name, channel, data)
+    if args.mode == "dump":
+        entry_name_counts = defaultdict(int)
+        while True:
+            try:
+                name, channel, data = reader.read_entry()
+            except EOFError:
+                break
+            entry_name_counts[name] += 1
+            reader.dump_entry(name, channel, data)
+        print("Entry name counts:", dict(entry_name_counts))
 
-    print("Entry name counts:", dict(entry_name_counts))
+    elif args.mode == "floor_ys":
+        res = reader.read_floor_ys()
+        print("res shape:", res.shape)
+        print("res:")
+        print(res)
+
+    else:
+        raise Exception("invalid mode %r" % (args.mode,))
+
     print("Finished")
 
 
