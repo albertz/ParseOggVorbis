@@ -1446,4 +1446,11 @@ struct OggReader {
 };
 
 
+extern "C" {
+	// Very simple interface.
+	// This is currently useful only together with the C API provided by Callbacks.h.
+	// Returns 0 if succeeded.
+	int ogg_vorbis_full_read(const char* filename, const char** error_out);
+}
+
 #endif /* ParseOggVorbis_h */
