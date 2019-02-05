@@ -18,7 +18,7 @@ class ParseOggVorbisLib:
     lib_ext = "so"
     if sys.platform == "darwin":
         lib_ext = "dylib"
-    lib_filename = "%s.%s" % (lib_name, lib_ext)
+    lib_filename = "./%s.%s" % (lib_name, lib_ext)
 
     def __init__(self):
         assert os.path.exists(self.lib_filename), "maybe run `./compile_lib_simple.py`"
