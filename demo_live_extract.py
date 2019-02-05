@@ -11,45 +11,72 @@ import struct
 import typing
 
 
-install_better_exchook()
-arg_parser = ArgumentParser()
-arg_parser.add_argument("file")
-args = arg_parser.parse_args()
+class ParseOggVorbisLib:
+    lib_name = "ParseOggVorbis"
+    lib_ext = "so"
+    if sys.platform == "darwin":
+        lib_ext = "dylib"
+    lib_filename = "%s.%s" % (lib_name, lib_ext)
 
-raw_bytes_in_memory_value = open(args.file, "rb").read()
-
-
-lib_name = "ParseOggVorbis"
-lib_ext = "so"
-if sys.platform == "darwin":
-    lib_ext = "dylib"
-lib_filename = "%s.%s" % (lib_name, lib_ext)
-
-ffi = cffi.FFI()
-ffi.cdef("""
-int ogg_vorbis_full_read_from_memory(const char* data, size_t data_len, const char** error_out);
-void set_data_output_file(const char* fn);
-void set_data_filter(const char** allowed_names);
-""")
-lib = ffi.dlopen("ParseOggVorbis.dylib")
-
-# Possible interesting values:
-# From setup:
-# floor1_unpack multiplier, floor1_unpack xs
-# From each audio frame:
-# floor_number
-# floor1 ys, floor1 final_ys, floor1 floor, floor_outputs
-# after_residue, after_envelope, pcm_after_mdct
-# after_envelope is the last before MDCT.
-print("set_data_filter")
-lib.set_data_filter(
-    [ffi.new("char[]", s.encode("utf8")) for s in [
-        "floor1_unpack multiplier", "floor1_unpack xs", "floor1 ys"]] + [ffi.NULL])
-
-
-class BackgroundReader(Thread):
     def __init__(self):
-        super(BackgroundReader, self).__init__()
+        assert os.path.exists(self.lib_filename), "maybe run `./compile_lib_simple.py`"
+        self.ffi = cffi.FFI()
+        self.ffi.cdef("""
+            int ogg_vorbis_full_read_from_memory(const char* data, size_t data_len, const char** error_out);
+            void set_data_output_file(const char* fn);
+            void set_data_filter(const char** allowed_names);
+            """)
+        self.lib = self.ffi.dlopen(self.lib_filename)
+
+    def set_data_filter(self, data_names):
+        """
+        Possible interesting values:
+        From setup:
+
+          floor1_unpack multiplier, floor1_unpack xs
+
+        From each audio frame:
+
+          floor_number
+          floor1 ys, floor1 final_ys, floor1 floor, floor_outputs
+          after_residue, after_envelope, pcm_after_mdct
+
+        after_envelope is the last before MDCT.
+
+        :param list[str] data_names:
+        """
+        self.lib.set_data_filter(
+            [self.ffi.new("char[]", s.encode("utf8")) for s in data_names] + [self.ffi.NULL])
+
+    def decode_ogg_vorbis(self, raw_bytes):
+        """
+        :param bytes raw_bytes:
+        :rtype: CallbacksOutputReader
+        """
+        callback_data_collector = _BackgroundReader()
+        callback_data_collector.start()
+
+        self.lib.set_data_output_file(
+            self.ffi.new("char[]", ("/dev/fd/%i" % callback_data_collector.write_fd).encode("utf8")))
+
+        error_out = self.ffi.new("char**")
+        res = self.lib.ogg_vorbis_full_read_from_memory(
+            self.ffi.new("char[]", raw_bytes), len(raw_bytes), error_out)
+        if res:
+            # This means we got an error.
+            raise Exception(
+                "ParseOggVorbisLib ogg_vorbis_full_read_from_memory error: %s" % (
+                    self.ffi.string(error_out[0]).decode("utf8")))
+
+        callback_data_collector.wait()
+        callback_data_collector.buffer.seek(0)
+        reader = CallbacksOutputReader(file=callback_data_collector.buffer)
+        return reader
+
+
+class _BackgroundReader(Thread):
+    def __init__(self):
+        super(_BackgroundReader, self).__init__()
         self.cond = Condition()
         self.read_fd, self.write_fd = os.pipe()
         self.buffer = io.BytesIO()
@@ -80,27 +107,7 @@ class BackgroundReader(Thread):
                 self.cond.wait()
 
 
-callback_data_collector = BackgroundReader()
-callback_data_collector.start()
-
-print("set_data_output_file")
-lib.set_data_output_file(ffi.new("char[]", ("/dev/fd/%i" % callback_data_collector.write_fd).encode("utf8")))
-
-print("ogg_vorbis_full_read_from_memory")
-error_out = ffi.new("char**")
-res = lib.ogg_vorbis_full_read_from_memory(
-    ffi.new("char[]", raw_bytes_in_memory_value), len(raw_bytes_in_memory_value), error_out)
-if res:
-    # This means we got an error.
-    print("Error:", ffi.string(error_out[0]).decode("utf8"))
-    sys.exit(1)
-print("Ok.")
-
-callback_data_collector.wait()
-print("Got bytes:", len(callback_data_collector.buffer.getvalue()))
-
-
-class Reader:
+class CallbacksOutputReader:
     def __init__(self, file):
         """
         :param io.BytesIO file:
@@ -227,14 +234,29 @@ class Reader:
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
 
-callback_data_collector.buffer.seek(0)
-reader = Reader(file=callback_data_collector.buffer)
+def main():
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument("file")
+    args = arg_parser.parse_args()
+    raw_bytes_in_memory_value = open(args.file, "rb").read()
 
-while True:
-    try:
-        name, channel, data = reader.read_entry()
-    except EOFError:
-        break
-    reader.dump_entry(name, channel, data)
+    lib = ParseOggVorbisLib()
 
-print("Finished")
+    print("set_data_filter")
+    lib.set_data_filter(["floor1_unpack multiplier", "floor1_unpack xs", "floor1 ys"])
+
+    reader = lib.decode_ogg_vorbis(raw_bytes_in_memory_value)
+
+    while True:
+        try:
+            name, channel, data = reader.read_entry()
+        except EOFError:
+            break
+        reader.dump_entry(name, channel, data)
+
+    print("Finished")
+
+
+if __name__ == '__main__':
+    install_better_exchook()
+    main()
