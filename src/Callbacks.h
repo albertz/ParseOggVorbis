@@ -35,6 +35,7 @@ extern "C" {
 // It is not an error to call this multiple times for the same ref.
 // However, it is an error to call any of the other functions without calling this first.
 void register_decoder_ref(const void* ref, const char* decoder_name, long sample_rate, int num_channels);
+// This is safe to call even if not registered.
 void unregister_decoder_ref(const void* ref);
 // Such that alias_ref is also a valid ref. orig_ref needs to be registered beforehand.
 void register_decoder_alias(const void* orig_ref, const void* alias_ref);

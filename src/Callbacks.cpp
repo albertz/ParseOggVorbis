@@ -119,7 +119,7 @@ struct Info {
 		reset_output_type();
 		output_type = ot;
 		if(ot == OutputType::OT_file) {
-			output_file = fopen(fn.c_str(), "wbx");
+			output_file = fopen(fn.c_str(), "wb");
 			assert(output_file);
 			raw_write_to_file("ParseOggVorbis-header-v1");
 			write_to_file("decoder-name", name);
@@ -181,13 +181,20 @@ struct Info {
 std::map<const void*, Info> decoders;
 std::map<const void*, const void*> decoder_alias_map;
 
-static Info& get_decoder(const void* ref) {
+static Info* get_decoder_ptr(const void* ref) {
 	auto alias_it = decoder_alias_map.find(ref);
 	if(alias_it != decoder_alias_map.end())
 		ref = alias_it->second;
 	auto it = decoders.find(ref);
-	assert(it != decoders.end());
-	return it->second;
+	if(it != decoders.end())
+		return &it->second;
+	return nullptr;
+}
+
+static Info& get_decoder(const void* ref) {
+	Info* info = get_decoder_ptr(ref);
+	assert(info);
+	return *info;
 }
 
 extern "C" void register_decoder_ref(const void* ref, const char* decoder_name, long sample_rate, int num_channels) {
@@ -216,10 +223,12 @@ extern "C" void register_decoder_alias(const void* orig_ref, const void* alias_r
 }
 
 extern "C" void unregister_decoder_ref(const void* ref) {
-	Info& info = get_decoder(ref);
-	for(const void* alias_ref : info.aliases)
+	Info* info = get_decoder_ptr(ref);
+	if(!info)
+		return;
+	for(const void* alias_ref : info->aliases)
 		decoder_alias_map.erase(alias_ref);
-	decoders.erase(info.ref); // warning: after this call, info becomes invalid
+	decoders.erase(info->ref); // warning: after this call, info becomes invalid
 }
 
 extern "C" void set_data_output_null(void) {

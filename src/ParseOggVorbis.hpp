@@ -1104,6 +1104,7 @@ struct VorbisStream {
 	Mdct mdct[2];
 
 	VorbisStream() : packet_counts_(0), audio_packet_counts_(0) {}
+	~VorbisStream() { unregister_decoder_ref(this); }
 
 	OkOrError parse_audio(BitReader& reader, VorbisStreamDecodeState& state, ParseCallbacks& callbacks) const {
 		// By design, this is a const function, because we will not modify any of the header or the setup.
