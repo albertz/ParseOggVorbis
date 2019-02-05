@@ -71,7 +71,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <alloca.h>
 #include "mdct.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846264338327
+#endif
 
 #define _ogg_malloc malloc
 #define _ogg_free free
