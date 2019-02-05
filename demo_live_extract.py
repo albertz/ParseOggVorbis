@@ -75,6 +75,8 @@ class ParseOggVorbisLib:
 
 
 class _BackgroundReader(Thread):
+    daemon = True
+
     def __init__(self):
         super(_BackgroundReader, self).__init__()
         self.cond = Condition()
