@@ -28,25 +28,25 @@ struct TypeInfoBase {
 template<typename T> struct TypeInfo {};
 template<> struct TypeInfo<float32_t> : TypeInfoBase<float32_t> {
 	static constexpr const char* name = "f32";
-	static constexpr uint8_t type_id = 1;
+	static constexpr uint8_t type_id = DT_Float32;
 };
 template<> struct TypeInfo<int32_t> : TypeInfoBase<int32_t> {
 	static constexpr const char* name = "i32";
-	static constexpr uint8_t type_id = 2;
+	static constexpr uint8_t type_id = DT_Int32;
 };
 template<> struct TypeInfo<uint32_t> : TypeInfoBase<uint32_t> {
 	static constexpr const char* name = "u32";
-	static constexpr uint8_t type_id = 3;
+	static constexpr uint8_t type_id = DT_UInt32;
 };
 template<> struct TypeInfo<uint8_t> : TypeInfoBase<uint8_t> {
 	static constexpr const char* name = "u8";
 	typedef int num_type;
-	static constexpr uint8_t type_id = 4;
+	static constexpr uint8_t type_id = DT_Uint8;
 };
 template<> struct TypeInfo<bool> : TypeInfoBase<bool> {
 	static constexpr const char* name = "bool";
 	typedef uint8_t raw_type;
-	static constexpr uint8_t type_id = 5;
+	static constexpr uint8_t type_id = DT_Bool;
 };
 
 template<typename It, typename T=typename std::iterator_traits<It>::value_type>

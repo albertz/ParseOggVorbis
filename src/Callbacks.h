@@ -44,6 +44,14 @@ void set_data_output_null(void);
 void set_data_output_short_stdout(void);
 void set_data_output_file(const char* fn);
 
+enum DataTypeId {
+	DT_Float32 = 1,
+	DT_Int32 = 2,
+	DT_UInt32 = 3,
+	DT_Uint8 = 4,
+	DT_Bool = 5  // stored as 1 byte
+};
+
 // Name is any descriptive name.
 // Channel can be -1, if it does not apply.
 // data can be NULL, if no data. In that case, len is ignored.
