@@ -52,6 +52,9 @@ enum DataTypeId {
 	DT_Bool = 5  // stored as 1 byte
 };
 
+// This will be used for the next registered decoder.
+void set_data_filter(const char** allowed_names);
+
 // Name is any descriptive name.
 // Channel can be -1, if it does not apply.
 // data can be NULL, if no data. In that case, len is ignored.

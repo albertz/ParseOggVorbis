@@ -76,13 +76,17 @@ const typename std::iterator_traits<It>::value_type* const_cast_to_ptr_or_null(c
 	return ItToPtrTraits<It>::const_cast_to_ptr_or_null(it);
 }
 
-
+// Global settings, set in advance, used for the next registered decoder.
 enum OutputType {
 	OT_null,
 	OT_short_stdout,
 	OT_file,
 } output_type = OT_null;
 std::string output_filename;
+
+bool use_data_filter_names = false;
+std::set<std::string> data_filter_names;
+
 
 static int decoder_unique_idx = 1;
 
@@ -95,7 +99,12 @@ struct Info {
 	int num_channels;
 	OutputType output_type;
 	FILE* output_file;
-	Info() : idx(0), ref(nullptr), sample_rate(0), num_channels(0), output_type(OT_null), output_file(nullptr) {}
+	bool use_data_filter_names;
+	std::set<std::string> data_name_filters;
+
+	Info() :
+	idx(0), ref(nullptr), sample_rate(0), num_channels(0),
+	output_type(OT_null), output_file(nullptr), use_data_filter_names(false) {}
 	~Info() { reset_output_type(); }
 
 	void reset_output_type() {
@@ -193,7 +202,11 @@ extern "C" void register_decoder_ref(const void* ref, const char* decoder_name, 
 	info.sample_rate = sample_rate;
 	info.num_channels = num_channels;
 	info.set_output_type(output_type, output_filename);
-	output_type = OT_null; // reset
+	info.use_data_filter_names = use_data_filter_names;
+	info.data_name_filters.swap(data_filter_names);
+	// reset
+	use_data_filter_names = false;
+	output_type = OT_null;
 }
 
 extern "C" void register_decoder_alias(const void* orig_ref, const void* alias_ref) {
@@ -220,6 +233,19 @@ extern "C" void set_data_output_short_stdout(void) {
 extern "C" void set_data_output_file(const char* fn) {
 	output_type = OutputType::OT_file;
 	output_filename = fn;
+}
+
+extern "C" void set_data_filter(const char** allowed_names) {
+	data_filter_names.clear();
+	if(!allowed_names) {
+		use_data_filter_names = false;
+		return;
+	}
+	use_data_filter_names = true;
+	for(const char** ptr = allowed_names; *ptr; ++ptr) {
+		const char* allowed_name = *ptr;
+		data_filter_names.insert(allowed_name);
+	}
 }
 
 template<typename It>
@@ -259,6 +285,11 @@ void push_data_file_T(Info& info, const char* name, int channel, const It& data,
 template<typename It>
 void push_data_T(const void* ref, const char* name, int channel, const It& data, const It& end) {
 	Info& info = get_decoder(ref);
+	if(info.use_data_filter_names) {
+		auto it = info.data_name_filters.find(name);
+		if(it == info.data_name_filters.end())
+			return;
+	}
 	switch(info.output_type) {
 		case OutputType::OT_null:
 			break;
