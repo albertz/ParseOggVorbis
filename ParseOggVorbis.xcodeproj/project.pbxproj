@@ -36,6 +36,7 @@
 		501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
 		501898F721F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
 		501898F921F7740500F1EF4D /* mdct.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898F821F7740500F1EF4D /* mdct.c */; };
+		50C043472209A128006F4B4F /* ParseOggVorbis.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 50C043462209A128006F4B4F /* ParseOggVorbis.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -128,6 +129,7 @@
 		501898F821F7740500F1EF4D /* mdct.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
 		501898FA21F7740C00F1EF4D /* mdct.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mdct.h; sourceTree = "<group>"; };
 		501898FB21F9B29000F1EF4D /* ParseOggVorbis.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ParseOggVorbis.hpp; sourceTree = "<group>"; };
+		50C043462209A128006F4B4F /* ParseOggVorbis.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ParseOggVorbis.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +183,7 @@
 			children = (
 				23309B3A21E3AAA100892406 /* main.cpp */,
 				501898FB21F9B29000F1EF4D /* ParseOggVorbis.hpp */,
+				50C043462209A128006F4B4F /* ParseOggVorbis.cpp */,
 				23309B4321E6574400892406 /* Utils.hpp */,
 				23309B4421E6577F00892406 /* Utils.cpp */,
 				501898F421F5B1C600F1EF4D /* Callbacks.h */,
@@ -368,6 +371,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				50C043472209A128006F4B4F /* ParseOggVorbis.cpp in Sources */,
 				501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */,
 				23309B3B21E3AAA100892406 /* main.cpp in Sources */,
 				23309B4521E6577F00892406 /* Utils.cpp in Sources */,
