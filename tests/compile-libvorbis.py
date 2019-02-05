@@ -2,25 +2,18 @@
 
 import os
 import sys
-from subprocess import check_call
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils import c_compile, install_better_exchook
 import argparse
 import shutil
-import tempfile
 from glob import glob
 
-import better_exchook
-better_exchook.install()
 
 libvorbis_dir = "libvorbis-1.3.6"
 libogg_dir = "libogg-1.3.3"
 standalone_dir = "libvorbis-standalone"
 src_dir = "../src"
-
-
-def call(args):
-    print("$ %s" % " ".join(args))
-    check_call(args)
-
 
 
 ogg_c_files = [
@@ -105,32 +98,8 @@ def copy_to_standalone():
         shutil.copy(src, dst)
 
 
-def _compile(src_files, common_opts, out_filename):
-    """
-    :param list[str] src_files:
-    :param list[str] common_opts:
-    :param str out_filename:
-    """
-    tmp_dir = tempfile.mkdtemp()
-    try:
-        used_cpp = False
-        for fn in src_files:
-            is_c = fn.endswith(".c")
-            if not is_c:
-                assert fn.endswith(".cpp")
-                used_cpp = True
-            call(
-                ["cc" if is_c else "c++", "-c", "-std=c99" if is_c else "-std=c++11"] +
-                common_opts +
-                [fn, "-o", "%s/%s.o" % (tmp_dir, os.path.basename(fn))])
-        o_files = glob("%s/*.o" % tmp_dir)
-        call(["c++" if used_cpp else "cc"] + o_files + ["-o", out_filename])
-    finally:
-        shutil.rmtree(tmp_dir)
-
-
 def compile_direct():
-    _compile(
+    c_compile(
         src_files=ogg_c_files + vorbis_c_files + ["libvorbis-demo.cpp", "%s/Callbacks.cpp" % src_dir],
         common_opts=["-I", "%s/include" % libogg_dir, "-I", "%s/include" % libvorbis_dir, "-I", src_dir],
         out_filename="libvorbis-direct.bin")
@@ -138,14 +107,14 @@ def compile_direct():
 
 def compile_standalone():
     copy_to_standalone()
-    _compile(
+    c_compile(
         src_files=glob("%s/*.c" % standalone_dir) + ["libvorbis-demo.cpp", "%s/Callbacks.cpp" % src_dir],
         common_opts=["-I", standalone_dir, "-I", src_dir],
         out_filename="libvorbis-standalone.bin")
 
 
 def compile_ours():
-    _compile(
+    c_compile(
         src_files=glob("%s/*.cpp" % src_dir) + glob("%s/*.c" % src_dir),
         common_opts=["-I", src_dir],
         out_filename="ours.bin")
@@ -161,4 +130,5 @@ def main():
 
 
 if __name__ == "__main__":
+    install_better_exchook()
     main()
