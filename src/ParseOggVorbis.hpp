@@ -1370,12 +1370,17 @@ struct OggReader {
 	OggReader(ParseCallbacks& callbacks) : packet_counts_(0), callbacks_(callbacks) {}
 
 	OkOrError open_file(const std::string& filename) {
-		reader_ = std::make_shared<FileReader>(filename);
+		return set_reader(std::make_shared<FileReader>(filename));
+	}
+
+	OkOrError set_reader(const std::shared_ptr<IReader>& reader) {
+		reader_ = reader;
 		CHECK_ERR(reader_->isValid());
 		return OkOrError();
 	}
 
 	OkOrError read_next_page(bool& reached_eof) {
+		CHECK(reader_.get());
 		Page::ReadHeaderResult res = buffer_page_.read_header(reader_.get());
 		if(res == Page::ReadHeaderResult::Ok)
 			CHECK_ERR(_read_page());
@@ -1386,12 +1391,21 @@ struct OggReader {
 		return OkOrError();
 	}
 
-	OkOrError full_read(const std::string& filename) {
-		CHECK_ERR(open_file(filename));
+	OkOrError read_until_end() {
 		bool reached_eof = false;
 		while(!reached_eof)
 			CHECK_ERR(read_next_page(reached_eof));
 		return OkOrError();
+	}
+
+	OkOrError full_read(const std::string& filename) {
+		CHECK_ERR(open_file(filename));
+		return read_until_end();
+	}
+
+	OkOrError full_read_from_memory(const uint8_t* data, size_t data_len) {
+		CHECK_ERR(set_reader(std::make_shared<ConstDataReader>(data, data_len)));
+		return read_until_end();
 	}
 
 	OkOrError _read_page() { // Called after buffer_page_.read_header().
@@ -1454,6 +1468,7 @@ extern "C" {
 	// This is currently useful only together with the C API provided by Callbacks.h.
 	// Returns 0 if succeeded.
 	int ogg_vorbis_full_read(const char* filename, const char** error_out);
+	int ogg_vorbis_full_read_from_memory(const char* data, size_t data_len, const char** error_out);
 }
 
 #endif /* ParseOggVorbis_h */

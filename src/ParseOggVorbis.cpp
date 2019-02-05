@@ -24,3 +24,20 @@ extern "C" int ogg_vorbis_full_read(const char* filename, const char** error_out
 	}
 	return 0;
 }
+
+extern "C" int ogg_vorbis_full_read_from_memory(const char* data, size_t data_len, const char** error_out) {
+	ParseCallbacks dummy_callbacks;
+	OggReader reader(dummy_callbacks);
+	OkOrError result = reader.full_read_from_memory((const uint8_t*) data, data_len);
+	if(result.is_error_) {
+		if(error_out) {
+			static char error_buf[255];
+			strncpy(error_buf, result.err_msg_.c_str(), sizeof(error_buf));
+			error_buf[sizeof(error_buf) - 1] = 0;
+			*error_out = error_buf;
+		}
+		return 1;
+	}
+	return 0;
+}
+
