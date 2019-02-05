@@ -9,6 +9,7 @@ from threading import Thread, Condition
 import io
 import struct
 import typing
+from collections import defaultdict
 
 
 class ParseOggVorbisLib:
@@ -251,14 +252,17 @@ def main():
         lib.set_data_filter(args.filter)
 
     reader = lib.decode_ogg_vorbis(raw_bytes_in_memory_value)
+    entry_name_counts = defaultdict(int)
 
     while True:
         try:
             name, channel, data = reader.read_entry()
         except EOFError:
             break
+        entry_name_counts[name] += 1
         reader.dump_entry(name, channel, data)
 
+    print("Entry name counts:", dict(entry_name_counts))
     print("Finished")
 
 
