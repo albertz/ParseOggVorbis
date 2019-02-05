@@ -11,3 +11,15 @@ To run the demo, and also compare it to the reference libvorbis implementation, 
     ./compile-libvorbis.py --mode standalone  # libvorbis with added debug hooks
     ./compile-libvorbis.py --mode ours
     ./compare-debug-out.py --ogg audio/test.stereo44khz.ogg
+
+## Why
+
+* I found the [reference C implementation by Xiph](https://github.com/xiph/vorbis/tree/master/lib) hard to read,
+  so this implementation tries to provide clean and easy to read C++ code instead.
+
+* The provided C++ API is simpler to use.
+
+* There is a debugging C API to inspect intermediate states of the decoder.
+  This was used for comparison with the reference C implementation,
+  and is also useful in general if you want to get access to the intermediate representation / state.
+
