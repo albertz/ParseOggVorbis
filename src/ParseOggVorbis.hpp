@@ -481,7 +481,7 @@ struct VorbisFloor1 {
 		}
 		use_output = true;
 
-		typedef uint32_t y_t;
+		typedef uint32_t y_t; // actually only numbers [0..range-1]
 		y_t range;
 		switch(multiplier) {
 			case 1: range = 256; break;
@@ -492,6 +492,9 @@ struct VorbisFloor1 {
 		}
 
 		// Decode Y values (7.2.3)
+		// These floor y values relate to the floor x values from the setup header.
+		// The floor y values (multiplied by the multiplier) are in the end
+		// looked up in inverse_db_table (256 entries).
 		std::vector<y_t> ys;
 		{
 			ys.push_back(reader.readBits<y_t>(highest_bit(range - 1)));
