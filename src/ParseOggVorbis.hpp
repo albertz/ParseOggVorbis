@@ -975,16 +975,17 @@ struct ParseCallbacks {
 struct VorbisStreamDecodeState {
 	// https://xiph.org/vorbis/doc/Vorbis_I_spec.html
 	// 1.3.2. Decode Procedure
+	// https://github.com/xiph/vorbis/blob/master/lib/block.c
 	// finished: audio between center of the previous frame and the center of the current frame
-	// amount: window_blocksize(previous_window)/4+window_blocksize(current_window)/4 (doc wrong?)
+	// amount: window_blocksize(previous_window)/4+window_blocksize(current_window)/4
 	// Data is not returned from the first frame
 
 	std::vector<std::vector<float>> pcm_buffer; // for each channel
 	uint32_t pcm_offset; // where to start writing next
 	int16_t prev_second_half_window_offset; // offset to pcm_offset. can be negative
 	uint32_t prev_win_size, cur_win_size;
-	uint64_t abs_total_pos;
-	int64_t expected_ending_total_pos;
+	uint64_t abs_total_pos; // number of samples so far returned
+	int64_t expected_ending_total_pos; // expected abs_total_pos after this audio frame
 
 	VorbisStreamDecodeState() :
 	pcm_offset(0), prev_second_half_window_offset(0),
@@ -1025,9 +1026,20 @@ struct VorbisStreamDecodeState {
 		}
 		if(expected_ending_total_pos >= 0) {
 			CHECK(abs_total_pos <= uint64_t(expected_ending_total_pos));
-			CHECK(abs_total_pos + num_frames >= uint64_t(expected_ending_total_pos));
-			// If this is the last packet, maybe need to shorten num_frames.
-			num_frames = uint32_t(expected_ending_total_pos - abs_total_pos);
+			if(abs_total_pos + num_frames >= uint64_t(expected_ending_total_pos))
+				// If this is the last packet, maybe need to shorten num_frames.
+				num_frames = uint32_t(expected_ending_total_pos - abs_total_pos);
+			else {
+				/*
+				 * This case should not happen, unless the stream is bad.
+				 * The reference implementation silently allows this.
+				 * https://github.com/xiph/vorbis/blob/master/lib/block.c
+				 * vorbis_synthesis_blockin()
+				 * Need to adapt abs_total_pos now.
+				*/
+				CHECK(false);  // disallow for now...
+				abs_total_pos = expected_ending_total_pos - num_frames;
+			}
 		}
 		if(num_frames > 0) {
 			uint8_t num_channels = pcm_buffer.size();
