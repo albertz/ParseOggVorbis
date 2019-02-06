@@ -275,25 +275,17 @@ class CallbacksOutputReader:
         return res_float
 
 
-def main():
-    arg_parser = ArgumentParser()
-    arg_parser.add_argument("file")
-    arg_parser.add_argument(
-        "--filter", nargs="*", default=[
-            "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
-            "floor_number", "floor1 final_ys", "finish_audio_packet"])
-    arg_parser.add_argument("--mode", default="dump")
-    args = arg_parser.parse_args()
-
-    raw_bytes_in_memory_value = open(args.file, "rb").read()
-
-    lib = ParseOggVorbisLib()
-
+def do_file(lib, raw_bytes, args):
+    """
+    :param ParseOggVorbisLib lib:
+    :param bytes raw_bytes:
+    :param args:
+    """
     if args.filter:
         print("set_data_filter:", args.filter)
         lib.set_data_filter(args.filter)
 
-    reader = lib.decode_ogg_vorbis(raw_bytes_in_memory_value)
+    reader = lib.decode_ogg_vorbis(raw_bytes)
 
     if args.mode == "dump":
         entry_name_counts = defaultdict(int)
@@ -314,6 +306,35 @@ def main():
 
     else:
         raise Exception("invalid mode %r" % (args.mode,))
+
+
+def main():
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument("file")
+    arg_parser.add_argument(
+        "--filter", nargs="*", default=[
+            "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+            "floor_number", "floor1 final_ys", "finish_audio_packet"])
+    arg_parser.add_argument("--mode", default="dump")
+    args = arg_parser.parse_args()
+
+    lib = ParseOggVorbisLib()
+
+    if args.file.endswith(".zip"):
+        print("Got a ZIP file, iterating through all OGG inside.")
+        import zipfile
+        ogg_count = 0
+        with zipfile.ZipFile(args.file) as zip_f:
+            for fn in zip_f.namelist():
+                print(fn)
+                if fn.endswith(".ogg"):
+                    ogg_count += 1
+                    do_file(lib, zip_f.read(fn), args)
+        print("Found %i OGG files." % ogg_count)
+
+    else:
+        raw_bytes_in_memory_value = open(args.file, "rb").read()
+        do_file(lib, raw_bytes_in_memory_value, args)
 
     print("Finished")
 
