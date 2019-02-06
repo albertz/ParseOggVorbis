@@ -7,6 +7,8 @@ import typing
 import tempfile
 import subprocess
 import os
+import sys
+import numpy
 
 
 my_dir = os.path.dirname(__file__) or "."
@@ -59,6 +61,23 @@ def assert_same_list(l1, l2):
         assert y1 == y2, "different at pos %i: %r vs %r" % (i, l1, l2)
 
 
+def short_list_repr(ls, pos, context=5):
+    """
+    :param list ls:
+    :param int pos:
+    :param int context:
+    :rtype: str
+    """
+    start_pos = max(pos - context, 0)
+    end_pos = min(pos + context + 1, len(ls))
+    items = [("_%r_" % ls[i]) if i == pos else repr(ls[i]) for i in range(start_pos, end_pos)]
+    if start_pos > 0:
+        items.insert(0, "...")
+    if end_pos < len(ls) - 1:
+        items.append("...")
+    return "[%s]" % ", ".join(items)
+
+
 def assert_close_list(l1, l2, eps=1e-5):
     """
     :param list|tuple l1:
@@ -70,7 +89,14 @@ def assert_close_list(l1, l2, eps=1e-5):
         return
     assert len(l1) == len(l2)
     for i, (y1, y2) in enumerate(zip(l1, l2)):
-        assert abs(y1 - y2) < eps, "different at pos %i: %r vs %r" % (i, l1, l2)
+        if abs(y1 - y2) >= eps:
+            squared_error = numpy.sum((numpy.array(l1) - numpy.array(l2)) ** 2)
+            mean_squared_error = squared_error / len(l1)
+            diff = abs(y1 - y2)
+            raise Exception(
+                ("different at pos %i, diff %f > eps %f\n" % (i, diff, eps)) +
+                ("mse: %f, se: %f,\nls1: %s,\nls2: %s" % (
+                    mean_squared_error, squared_error, short_list_repr(l1, i), short_list_repr(l2, i))))
 
 
 class FloorData:
@@ -371,6 +397,19 @@ class Reader:
         """
         return AudioPacket(reader=self, dump=dump)
 
+    def count_remaining_audio_packets(self, dump):
+        """
+        :param bool dump:
+        :rtype: int
+        """
+        count = 0
+        while True:
+            packet = self.read_audio_packet(dump=dump)
+            if packet.eof:
+                return count
+            else:
+                count += 1
+
     def add_pcm_data(self, channel, pcm_data):
         """
         :param int channel:
@@ -390,7 +429,11 @@ def main():
     arg_parser.add_argument("--ourout")
     arg_parser.add_argument("--libvorbisout")
     arg_parser.add_argument("--dump_stdout", action="store_true")
+    arg_parser.add_argument("--no_stderr", action="store_true")
     args = arg_parser.parse_args()
+
+    if args.no_stderr:
+        sys.stderr = sys.stdout
 
     if args.ogg:
         assert not args.ourout, "--ogg xor --ourout.\n%s" % arg_parser.format_usage()
@@ -461,6 +504,14 @@ def main():
                         del reader2.pcm_data[channel]
             except Exception:
                 print("Exception at packet %i, num samples %r." % (num_packets, reader1.num_samples))
+                try:
+                    num_remaining_packets1 = reader1.count_remaining_audio_packets(dump=args.dump_stdout)
+                    num_remaining_packets2 = reader2.count_remaining_audio_packets(dump=args.dump_stdout)
+                    print("Num remaining reader1: %i, reader2: %i" % (num_remaining_packets1, num_remaining_packets2))
+                except Exception:
+                    print("During count_remaining_audio_packets, another exception occured:")
+                    better_exchook.better_exchook(*sys.exc_info())
+                print("Reraising original exception now.")
                 raise
         if packet1.eof:
             print("EOF")
