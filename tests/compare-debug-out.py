@@ -181,7 +181,8 @@ class AudioPacket:
             elif name == "finish_audio_packet":
                 break
             elif name in ["floor1 final_ys", "floor1 step2_flag", "floor1 floor", "floor_outputs",
-                          "floor1 fit_value unwrapped"]:
+                          "floor1 fit_value unwrapped",
+                          "abs_total_pos", "expected_ending_total_pos"]:
                 pass  # unhandled for now...
             else:
                 print("unknown entry %r" % name)
