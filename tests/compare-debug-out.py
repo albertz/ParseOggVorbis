@@ -282,7 +282,7 @@ class Reader:
         key = self.raw_read()
         key = key.decode("utf8")
         type_id, = struct.unpack("B", self.raw_read(expect_size=1))
-        assert 1 <= type_id <= 5
+        assert 1 <= type_id <= 7
         elem_size, = struct.unpack("B", self.raw_read(expect_size=1))
         raw_data = self.raw_read()
         assert len(raw_data) % elem_size == 0
