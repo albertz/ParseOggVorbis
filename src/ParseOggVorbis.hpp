@@ -1085,7 +1085,11 @@ struct VorbisStreamDecodeState {
 				memmove(&pcm_buffer[channel][pcm_cur_second_half_window_offset], &pcm_buffer[channel][pcm_offset + cur_win_size / 2], (cur_win_size / 2) * sizeof(float));
 				memset(&pcm_buffer[channel][delete_start_offset], 0, (pcm_buffer[channel].size() - delete_start_offset) * sizeof(float));
 			}
-			next_pcm_offset = 0;
+			if(needed_offset < 0)
+				// We need to have the cur second half window still available for the next forwardReadyPcm().
+				next_pcm_offset = -needed_offset;
+			else
+				next_pcm_offset = 0;
 		}
 		else if(next_pcm_offset < 0) { // possible if short window and next is long window
 			uint32_t extra_room_needed = uint32_t(-next_pcm_offset);
