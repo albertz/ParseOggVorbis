@@ -1097,10 +1097,10 @@ struct VorbisStreamDecodeState {
 			}
 			next_pcm_offset = 0;
 		}
+		if(next_win_size < cur_win_size)
+			CHECK(next_pcm_offset > 0);
 		prev_second_half_window_offset = int16_t(int32_t(pcm_cur_second_half_window_offset) - int32_t(next_pcm_offset));
 		pcm_offset = next_pcm_offset;
-		if(next_win_size < cur_win_size)
-			CHECK(pcm_offset > 0);
 		return OkOrError();
 	}
 
