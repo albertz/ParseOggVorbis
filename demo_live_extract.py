@@ -239,13 +239,13 @@ class CallbacksOutputReader:
             data_repr = repr(list(data))
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
-    def read_floor_ys(self, truncate_to_smaller=True):
+    def read_floor_ys(self, output_dim, include_floor_number=True):
         """
-        :param bool truncate_to_smaller: dim will be the smaller floor mode
+        :param int output_dim:
+        :param bool include_floor_number:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
         """
-        assert truncate_to_smaller, "onluy this is implemented currently"
         floor_multipliers = []
         floor_xs = []
         while True:
@@ -258,9 +258,12 @@ class CallbacksOutputReader:
             if name == "finish_setup":
                 break
         assert len(floor_multipliers) == len(floor_xs) > 0
-        dim = min([len(xs) for xs in floor_xs])
+        res_float = numpy.zeros((0, output_dim), dtype="float32")
+        num_floors = len(floor_xs)
+        dim = output_dim
+        if include_floor_number:
+            dim -= 1
         recent_floor_number = None
-        res_int = numpy.zeros((0, dim), dtype="uint8")  # values [0..255]
         while True:
             try:
                 name, channel, data = self.read_entry()
@@ -271,10 +274,17 @@ class CallbacksOutputReader:
                 assert 0 <= recent_floor_number < len(floor_xs)
             if name in {"floor1 ys", "floor1 final_ys"}:
                 assert len(data) == len(floor_xs[recent_floor_number])
-                res_int = numpy.concatenate(
-                    [res_int, numpy.array(data[:dim], dtype="uint8")[None, :] * floor_multipliers[recent_floor_number]],
-                    axis=0)
-        res_float = (res_int.astype("float32") - 127.5) / 127.5
+                # values [0..255]
+                data_int = numpy.array(data[:dim], dtype="float32") * floor_multipliers[recent_floor_number]
+                # values [-1.0,1.0]
+                data_float = (data_int.astype("float32") - 127.5) / 127.5
+                frame_float = numpy.zeros((output_dim,), dtype="float32")
+                offset_dim = 0
+                if include_floor_number:
+                    frame_float[0] = (recent_floor_number + 1.0) / num_floors - 0.5  # (-0.5,0.5)
+                    offset_dim = 1
+                frame_float[offset_dim:offset_dim + frame_float.shape[0]] = data_float
+                res_float = numpy.concatenate([res_float, frame_float[None, :]], axis=0)
         return res_float
 
 
@@ -302,7 +312,8 @@ def do_file(lib, raw_bytes, args):
         print("Entry name counts:", dict(entry_name_counts))
 
     elif args.mode == "floor_ys":
-        res = reader.read_floor_ys()
+        assert args.output_dim
+        res = reader.read_floor_ys(output_dim=args.output_dim)
         print("res shape:", res.shape)
         print("res:")
         print(res)
@@ -319,6 +330,7 @@ def main():
             "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
             "floor_number", "floor1 final_ys", "finish_audio_packet"])
     arg_parser.add_argument("--mode", default="dump")
+    arg_parser.add_argument("--output_dim", type=int)
     args = arg_parser.parse_args()
 
     lib = ParseOggVorbisLib()
