@@ -115,6 +115,7 @@ struct Mdct {
 	unsigned int n;
 	mdct_lookup l;
 	Mdct() : _initialized(false), n(0) {}
+	Mdct(const Mdct& other) : _initialized(false), n(0) { (*this) = other; }
 	~Mdct() { if(_initialized) mdct_clear(&l); }
 	void init(unsigned int n) {
 		assert(!_initialized);
@@ -125,6 +126,11 @@ struct Mdct {
 	void backward(const DATA_TYPE *in, DATA_TYPE *out) const {
 		assert(_initialized);
 		mdct_backward(&l, in, out);
+	}
+	Mdct& operator=(const Mdct& other) {
+		if(other._initialized)
+			init(other.n);
+		return *this;
 	}
 };
 #endif
