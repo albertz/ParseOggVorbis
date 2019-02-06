@@ -156,7 +156,7 @@ class CallbacksOutputReader:
         raw_data = self.raw_read()
         assert len(raw_data) % elem_size == 0
         num_elem = len(raw_data) / elem_size
-        raw_unpack_type_id = {1: "f", 2: "i", 3: "I", 4: "B", 5: "B"}
+        raw_unpack_type_id = {1: "f", 2: "i", 3: "I", 4: "B", 5: "B", 6: "q", 7: "Q"}
         assert struct.calcsize(raw_unpack_type_id[type_id]) == elem_size
         if type_id == 4:  # uint8 data
             if return_uint8_as_bytes:

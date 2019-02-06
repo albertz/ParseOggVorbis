@@ -50,7 +50,9 @@ enum DataTypeId {
 	DT_Int32 = 2,
 	DT_UInt32 = 3,
 	DT_Uint8 = 4,
-	DT_Bool = 5  // stored as 1 byte
+	DT_Bool = 5,  // stored as 1 byte
+	DT_Int64 = 6,
+	DT_UInt64 = 7
 };
 
 // This will be used for the next registered decoder.
@@ -60,9 +62,11 @@ void set_data_filter(const char** allowed_names);
 // Channel can be -1, if it does not apply.
 // data can be NULL, if no data. In that case, len is ignored.
 void push_data_float(const void* ref, const char* name, int channel, const float* data, size_t len);
-void push_data_u32(const void* ref, const char* name, int channel, const uint32_t* data, size_t len);
 void push_data_u8(const void* ref, const char* name, int channel, const uint8_t* data, size_t len);
 void push_data_i32(const void* ref, const char* name, int channel, const int32_t* data, size_t len);
+void push_data_u32(const void* ref, const char* name, int channel, const uint32_t* data, size_t len);
+void push_data_i64(const void* ref, const char* name, int channel, const int64_t* data, size_t len);
+void push_data_u64(const void* ref, const char* name, int channel, const uint64_t* data, size_t len);
 void push_data_int(const void* ref, const char* name, int channel, const int* data, size_t len);
 
 // General utilities.

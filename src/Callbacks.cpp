@@ -48,6 +48,14 @@ template<> struct TypeInfo<bool> : TypeInfoBase<bool> {
 	typedef uint8_t raw_type;
 	static constexpr uint8_t type_id = DT_Bool;
 };
+template<> struct TypeInfo<int64_t> : TypeInfoBase<int64_t> {
+	static constexpr const char* name = "i64";
+	static constexpr uint8_t type_id = DT_Int64;
+};
+template<> struct TypeInfo<uint64_t> : TypeInfoBase<uint64_t> {
+	static constexpr const char* name = "u64";
+	static constexpr uint8_t type_id = DT_UInt64;
+};
 
 template<typename It, typename T=typename std::iterator_traits<It>::value_type>
 struct ItToPtrTraits {
@@ -314,13 +322,19 @@ void push_data_T(const void* ref, const char* name, int channel, const It& data,
 extern "C" void push_data_float(const void* ref, const char* name, int channel, const float* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
+extern "C" void push_data_i32(const void* ref, const char* name, int channel, const int32_t* data, size_t len) {
+	push_data_T(ref, name, channel, data, data + len);
+}
 extern "C" void push_data_u32(const void* ref, const char* name, int channel, const uint32_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_u8(const void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
+extern "C" void push_data_i64(const void* ref, const char* name, int channel, const int64_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
-extern "C" void push_data_i32(const void* ref, const char* name, int channel, const int32_t* data, size_t len) {
+extern "C" void push_data_u64(const void* ref, const char* name, int channel, const uint64_t* data, size_t len) {
+	push_data_T(ref, name, channel, data, data + len);
+}
+extern "C" void push_data_u8(const void* ref, const char* name, int channel, const uint8_t* data, size_t len) {
 	push_data_T(ref, name, channel, data, data + len);
 }
 extern "C" void push_data_int(const void* ref, const char* name, int channel, const int* data, size_t len) {
