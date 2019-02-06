@@ -1130,6 +1130,8 @@ struct VorbisStream {
 		// https://github.com/runningwild/gorbis/blob/master/vorbis/codec.go
 		// https://github.com/ioctlLR/NVorbis/blob/master/NVorbis/VorbisStreamDecoder.cs
 		push_data_u8(this, "start_audio_packet", -1, nullptr, 0);
+		push_data_u64(this, "abs_total_pos", -1, &decode_state.abs_total_pos, 1);
+		push_data_i64(this, "expected_ending_total_pos", -1, &decode_state.expected_ending_total_pos, 1);
 		CHECK(reader.readBitsT<1>() == 0);
 		CHECK(setup.modes.size() > 0);
 
