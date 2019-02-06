@@ -89,7 +89,10 @@ class _BackgroundReader(Thread):
     def run(self):
         try:
             while True:
-                buf = os.read(self.read_fd, 1024 * 1024)
+                try:
+                    buf = os.read(self.read_fd, 1024 * 1024)
+                except OSError:
+                    break
                 if not buf:
                     break
                 self.buffer.write(buf)
