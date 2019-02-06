@@ -503,7 +503,8 @@ def main():
                     if not pcms2:
                         del reader2.pcm_data[channel]
             except Exception:
-                print("Exception at packet %i, num samples %r." % (num_packets, reader1.num_samples))
+                print("Exception at packet %i, num samples1 %r, num samples2 %r (diff is valid here)." % (
+                    num_packets, reader1.num_samples, reader2.num_samples))
                 try:
                     num_remaining_packets1 = reader1.count_remaining_audio_packets(dump=args.dump_stdout)
                     num_remaining_packets2 = reader2.count_remaining_audio_packets(dump=args.dump_stdout)
