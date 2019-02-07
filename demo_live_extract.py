@@ -21,7 +21,12 @@ class ParseOggVorbisLib:
         lib_ext = "dylib"
     lib_filename = "./%s.%s" % (lib_name, lib_ext)
 
-    def __init__(self):
+    def __init__(self, lib_filename=None):
+        """
+        :param str|None lib_filename:
+        """
+        if lib_filename:
+            self.lib_filename = lib_filename
         assert os.path.exists(self.lib_filename), "maybe run `./compile_lib_simple.py`"
         self.ffi = cffi.FFI()
         self.ffi.cdef("""
