@@ -6,11 +6,12 @@ import cffi
 from utils import install_better_exchook
 from argparse import ArgumentParser
 from threading import Thread, Condition
+from _thread import interrupt_main
 import io
 import struct
-import typing
 from collections import defaultdict
 import numpy
+from concurrent.futures import ThreadPoolExecutor
 
 
 class ParseOggVorbisLib:
@@ -50,11 +51,15 @@ class ParseOggVorbisLib:
         self.lib.set_data_filter(
             [self.ffi.new("char[]", s.encode("utf8")) for s in data_names] + [self.ffi.NULL])
 
-    def decode_ogg_vorbis(self, raw_bytes):
+    def decode_ogg_vorbis(self, raw_bytes, data_filter=None):
         """
         :param bytes raw_bytes:
+        :param list[str]|None data_filter:
         :rtype: CallbacksOutputReader
         """
+        if data_filter:
+            self.set_data_filter(data_filter)
+
         callback_data_collector = _BackgroundReader()
         callback_data_collector.start()
 
@@ -87,26 +92,29 @@ class _BackgroundReader(Thread):
         self.finished = False
 
     def run(self):
+        # noinspection PyBroadException
         try:
             while True:
-                try:
-                    buf = os.read(self.read_fd, 1024 * 1024)
-                except OSError:
-                    break
+                buf = os.read(self.read_fd, 1024 * 1024)
                 if not buf:
                     break
                 self.buffer.write(buf)
         except Exception:
             sys.excepthook(*sys.exc_info())
+            interrupt_main()
         finally:
             with self.cond:
                 self.finished = True
+                os.close(self.read_fd)
                 self.cond.notify_all()
 
     def wait(self):
+        """
+        Call this when you know that everything has been written to self.write_fd.
+        This waits until the thread has read everything from self.read_fd.
+        """
         with self.cond:
             os.close(self.write_fd)
-            os.close(self.read_fd)
             while True:
                 if self.finished:
                     return
@@ -288,17 +296,22 @@ class CallbacksOutputReader:
         return res_float
 
 
-def do_file(lib, raw_bytes, args):
+def _do_file(lib, args, fn=None, reader=None, raw_bytes=None):
     """
     :param ParseOggVorbisLib lib:
-    :param bytes raw_bytes:
+    :param bytes|None raw_bytes:
     :param args:
+    :param str|None fn:
+    :param CallbacksOutputReader|None reader:
     """
-    if args.filter:
-        print("set_data_filter:", args.filter)
-        lib.set_data_filter(args.filter)
+    if fn:
+        print(fn)
 
-    reader = lib.decode_ogg_vorbis(raw_bytes)
+    if not reader:
+        assert raw_bytes is not None
+        reader = lib.decode_ogg_vorbis(raw_bytes, data_filter=args.filter)
+    else:
+        assert raw_bytes is None
 
     if args.mode == "dump":
         entry_name_counts = defaultdict(int)
@@ -331,6 +344,7 @@ def main():
             "floor_number", "floor1 final_ys", "finish_audio_packet"])
     arg_parser.add_argument("--mode", default="dump")
     arg_parser.add_argument("--output_dim", type=int)
+    arg_parser.add_argument("--multi_threaded", action="store_true")
     args = arg_parser.parse_args()
 
     lib = ParseOggVorbisLib()
@@ -340,16 +354,28 @@ def main():
         import zipfile
         ogg_count = 0
         with zipfile.ZipFile(args.file) as zip_f:
-            for fn in zip_f.namelist():
-                print(fn)
-                if fn.endswith(".ogg"):
+            if args.multi_threaded:
+                fns_futures = {}  # dict fn -> future of reader
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    for fn in zip_f.namelist():
+                        if fn.endswith(".ogg"):
+                            fns_futures[fn] = executor.submit(
+                                lib.decode_ogg_vorbis, raw_bytes=zip_f.read(fn), data_filter=args.filter)
+                    for fn in zip_f.namelist():
+                        ogg_count += 1
+                        if fn.endswith(".ogg"):
+                            _do_file(lib, args=args, reader=fns_futures[fn].result(), fn=fn)
+            else:
+                for fn in zip_f.namelist():
                     ogg_count += 1
-                    do_file(lib, zip_f.read(fn), args)
+                    if fn.endswith(".ogg"):
+                        _do_file(lib, args=args, raw_bytes=zip_f.read(fn), fn=fn)
+
         print("Found %i OGG files." % ogg_count)
 
     else:
         raw_bytes_in_memory_value = open(args.file, "rb").read()
-        do_file(lib, raw_bytes_in_memory_value, args)
+        _do_file(lib, raw_bytes=raw_bytes_in_memory_value, args=args)
 
     print("Finished")
 
