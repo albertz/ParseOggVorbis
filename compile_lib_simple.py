@@ -16,7 +16,7 @@ lib_filename = "%s.%s" % (lib_name, lib_ext)
 
 
 def compile_lib():
-    src_files = glob("%s/*.cpp" % src_dir) + glob("%s/*.c" % src_dir)
+    src_files = glob("%s/*.cpp" % src_dir)
     src_files.remove("%s/main.cpp" % src_dir)
     c_compile(
         src_files=src_files,

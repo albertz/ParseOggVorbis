@@ -115,7 +115,7 @@ def compile_standalone():
 
 def compile_ours():
     c_compile(
-        src_files=glob("%s/*.cpp" % src_dir) + glob("%s/*.c" % src_dir),
+        src_files=glob("%s/*.cpp" % src_dir),
         common_opts=["-I", src_dir],
         out_filename="ours.bin")
 
