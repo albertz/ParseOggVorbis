@@ -14,6 +14,7 @@
 #include <iostream>
 #include <type_traits>
 #include <iterator>
+#include <mutex>
 #include <assert.h>
 
 
@@ -84,20 +85,29 @@ const typename std::iterator_traits<It>::value_type* const_cast_to_ptr_or_null(c
 	return ItToPtrTraits<It>::const_cast_to_ptr_or_null(it);
 }
 
-// Global settings, set in advance, used for the next registered decoder.
 enum OutputType {
 	OT_null,
 	OT_short_stdout,
 	OT_file,
-} output_type = OT_null;
-std::string output_filename;
+};
 
-bool use_data_filter_names = false;
-std::set<std::string> data_filter_names;
+// Global settings, set in advance, used for the next registered decoder (thread_local).
+thread_local OutputType output_type = OT_null;
+thread_local std::string output_filename;
+
+thread_local bool use_data_filter_names = false;
+thread_local std::set<std::string> data_filter_names;
 
 
-static int decoder_unique_idx = 1;
+// Used for registering, the map, etc.
+// *Not* used for the Info itself.
+// We expect that there can be multiple threads running, each with its own decoder,
+// but every decoder will always ever be in the same thread.
+std::mutex global_decoder_mutex;
 
+static int decoder_unique_idx = 1; // guarded by global_decoder_mutex
+
+// Not threadsafe.
 struct Info {
 	int idx;
 	std::string name;
@@ -186,10 +196,12 @@ struct Info {
 	}
 };
 
+// guarded by global_decoder_mutex
 std::map<const void*, Info> decoders;
 std::map<const void*, const void*> decoder_alias_map;
 
 static Info* get_decoder_ptr(const void* ref) {
+	std::lock_guard<std::mutex> lock(global_decoder_mutex);
 	auto alias_it = decoder_alias_map.find(ref);
 	if(alias_it != decoder_alias_map.end())
 		ref = alias_it->second;
@@ -206,6 +218,7 @@ static Info& get_decoder(const void* ref) {
 }
 
 extern "C" void register_decoder_ref(const void* ref, const char* decoder_name, long sample_rate, int num_channels) {
+	std::lock_guard<std::mutex> lock(global_decoder_mutex);
 	Info& info = decoders[ref];
 	if(!info.idx) {
 		assert(decoder_unique_idx);
@@ -226,19 +239,26 @@ extern "C" void register_decoder_ref(const void* ref, const char* decoder_name, 
 
 extern "C" void register_decoder_alias(const void* orig_ref, const void* alias_ref) {
 	Info& info = get_decoder(orig_ref);
-	info.aliases.insert(alias_ref);
-	decoder_alias_map[alias_ref] = info.ref;
+	{
+		std::lock_guard<std::mutex> lock(global_decoder_mutex);
+		info.aliases.insert(alias_ref);
+		decoder_alias_map[alias_ref] = info.ref;
+	}
 }
 
 extern "C" void unregister_decoder_ref(const void* ref) {
 	Info* info = get_decoder_ptr(ref);
 	if(!info)
 		return;
-	for(const void* alias_ref : info->aliases)
-		decoder_alias_map.erase(alias_ref);
-	decoders.erase(info->ref); // warning: after this call, info becomes invalid
+	{
+		std::lock_guard<std::mutex> lock(global_decoder_mutex);
+		for(const void* alias_ref : info->aliases)
+			decoder_alias_map.erase(alias_ref);
+		decoders.erase(info->ref); // warning: after this call, info becomes invalid
+	}
 }
 
+// Note: These are thread_local
 extern "C" void set_data_output_null(void) {
 	output_type = OT_null;
 }

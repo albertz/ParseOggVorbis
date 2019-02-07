@@ -7,12 +7,18 @@
 //
 
 /*
- This file was intended to provide simple hooks into existing code.
- We patched libvorbis with a few calls to these hook functions to extract certain
- intermedia decode information/state, see `tests/libvorbis-standalone`.
- We also added similar hooks to our own implementation, to allow for an easy comparison.
- This is being tested by `tests/compare-debug-out.py`.
- */
+This file was intended to provide simple hooks into existing code.
+We patched libvorbis with a few calls to these hook functions to extract certain
+intermedia decode information/state, see `tests/libvorbis-standalone`.
+We also added similar hooks to our own implementation, to allow for an easy comparison.
+This is being tested by `tests/compare-debug-out.py`.
+
+About thread-safety:
+Multiple decoders can run in multiple threads, and thus the (un)register* functions are thread-safe.
+However, we expect that every single decoder runs in a single thread.
+The global set_data* functions are thread_local,
+i.e. they will apply for the next registered decoder in the same thread only.
+*/
 
 #ifndef Callbacks_h
 #define Callbacks_h
@@ -40,7 +46,7 @@ void unregister_decoder_ref(const void* ref);
 // Such that alias_ref is also a valid ref. orig_ref needs to be registered beforehand.
 void register_decoder_alias(const void* orig_ref, const void* alias_ref);
 
-// This setting will be used for the next registered decoder.
+// This setting will be used for the next registered decoder (thread_local).
 void set_data_output_null(void);
 void set_data_output_short_stdout(void);
 void set_data_output_file(const char* fn);
@@ -55,7 +61,7 @@ enum DataTypeId {
 	DT_UInt64 = 7
 };
 
-// This will be used for the next registered decoder.
+// This will be used for the next registered decoder (thread_local).
 void set_data_filter(const char** allowed_names);
 
 // Name is any descriptive name.
