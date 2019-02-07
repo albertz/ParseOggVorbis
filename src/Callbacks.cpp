@@ -138,7 +138,11 @@ struct Info {
 		output_type = ot;
 		if(ot == OutputType::OT_file) {
 			output_file = fopen(fn.c_str(), "wb");
-			assert(output_file);
+			if(!output_file) {
+				fprintf(stderr, "Callbacks: could not open file %s\n", fn.c_str());
+				fflush(stderr);
+				abort(); // not sure what else to do...
+			}
 			raw_write_to_file("ParseOggVorbis-header-v1");
 			write_to_file("decoder-name", name);
 			write_to_file("decoder-sample-rate", (uint32_t) sample_rate);
