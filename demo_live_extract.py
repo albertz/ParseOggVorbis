@@ -2,8 +2,12 @@
 
 import os
 import sys
+
+if __name__ == '__main__':
+    # https://stackoverflow.com/questions/54576879/
+    __path__ = [os.path.dirname(os.path.abspath(__file__))]
+
 import cffi
-from utils import install_better_exchook
 from argparse import ArgumentParser
 from threading import Thread, Condition
 from _thread import interrupt_main
@@ -12,6 +16,7 @@ import struct
 from collections import defaultdict
 import numpy
 from concurrent.futures import ThreadPoolExecutor
+from .utils import install_better_exchook
 
 
 class ParseOggVorbisLib:
