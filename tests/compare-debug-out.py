@@ -9,11 +9,20 @@ import subprocess
 import os
 import sys
 import numpy
+import atexit
 
 
 my_dir = os.path.dirname(__file__) or "."
 default_ours_exec = "%s/ours.bin" % my_dir
 default_libvorbis_exec = "%s/libvorbis-standalone.bin" % my_dir
+
+
+def call(cmd):
+    """
+    :param list[str] cmd:
+    """
+    print("$ %s" % " ".join(cmd))
+    subprocess.check_call(cmd)
 
 
 def create_debug_out(exec_path, ogg_filename):
@@ -30,9 +39,9 @@ def create_debug_out(exec_path, ogg_filename):
     f.close()
     assert not os.path.exists(debug_out_fn)
     cmd = [exec_path, "--in", ogg_filename, "--debug_out", debug_out_fn]
-    print("$ %s" % " ".join(cmd))
-    subprocess.check_call(cmd)
+    call(cmd)
     assert os.path.exists(debug_out_fn)
+    atexit.register(lambda: os.remove(debug_out_fn))
     return debug_out_fn
 
 
@@ -425,6 +434,7 @@ def main():
     better_exchook.install()
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--ogg")
+    arg_parser.add_argument("--zip")
     arg_parser.add_argument("--ourexec")
     arg_parser.add_argument("--libvorbisexec")
     arg_parser.add_argument("--ourout")
@@ -435,6 +445,33 @@ def main():
 
     if args.no_stderr:
         sys.stderr = sys.stdout
+
+    if args.zip:
+        assert not args.ogg and not args.ourout and not args.libvorbisout
+        sub_cmd = [sys.argv[0]]
+        if args.ourexec:
+            sub_cmd += ["--ourexec", args.ourexec]
+        if args.libvorbisexec:
+            sub_cmd += ["--libvorbisexec", args.libvorbisexec]
+        if args.dump_stdout:
+            sub_cmd += ["--dump_stdout"]
+        if args.no_stderr:
+            sub_cmd += ["--no_stderr"]
+
+        import zipfile
+        ogg_count = 0
+        with zipfile.ZipFile(args.zip) as zip_f:
+            for fn in zip_f.namelist():
+                print(fn)
+                if fn.endswith(".ogg"):
+                    ogg_count += 1
+                    ogg_raw_bytes = zip_f.read(fn)
+                    with tempfile.NamedTemporaryFile(suffix=os.path.basename(fn)) as tmp_f:
+                        tmp_f.write(ogg_raw_bytes)
+                        tmp_f.flush()
+                        call(sub_cmd + ["--ogg", tmp_f.name])
+        print("Found %i OGG files." % ogg_count)
+        return
 
     if args.ogg:
         assert not args.ourout, "--ogg xor --ourout.\n%s" % arg_parser.format_usage()
