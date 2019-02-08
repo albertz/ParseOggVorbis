@@ -11,6 +11,7 @@
 		23309B4521E6577F00892406 /* Utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 23309B4421E6577F00892406 /* Utils.cpp */; };
 		23309B4E21E6688000892406 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 23309B4D21E6688000892406 /* main.cpp */; };
 		23309B5221E668A500892406 /* test_Utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 23309B4621E6653300892406 /* test_Utils.cpp */; };
+		236C5168220E28E900C43525 /* mdct.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 236C5167220E28E900C43525 /* mdct.cpp */; };
 		501898B221F4A4C100F1EF4D /* ogg_bitwise.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898B021F4A4C000F1EF4D /* ogg_bitwise.c */; };
 		501898B321F4A4C100F1EF4D /* ogg_framing.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898B121F4A4C000F1EF4D /* ogg_framing.c */; };
 		501898C721F4A4D300F1EF4D /* vorbis_lpc.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898B421F4A4D200F1EF4D /* vorbis_lpc.c */; };
@@ -35,7 +36,6 @@
 		501898F221F4A5E700F1EF4D /* libvorbis-demo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F121F4A5E700F1EF4D /* libvorbis-demo.cpp */; };
 		501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
 		501898F721F5C52E00F1EF4D /* Callbacks.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 501898F521F5C52E00F1EF4D /* Callbacks.cpp */; };
-		501898F921F7740500F1EF4D /* mdct.c in Sources */ = {isa = PBXBuildFile; fileRef = 501898F821F7740500F1EF4D /* mdct.c */; };
 		50C043472209A128006F4B4F /* ParseOggVorbis.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 50C043462209A128006F4B4F /* ParseOggVorbis.cpp */; };
 /* End PBXBuildFile section */
 
@@ -79,6 +79,7 @@
 		23309B4621E6653300892406 /* test_Utils.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = test_Utils.cpp; sourceTree = "<group>"; };
 		23309B4B21E6688000892406 /* Test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Test; sourceTree = BUILT_PRODUCTS_DIR; };
 		23309B4D21E6688000892406 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		236C5167220E28E900C43525 /* mdct.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = mdct.cpp; sourceTree = "<group>"; };
 		501898A921F4A46A00F1EF4D /* libvorbis-standalone */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "libvorbis-standalone"; sourceTree = BUILT_PRODUCTS_DIR; };
 		501898B021F4A4C000F1EF4D /* ogg_bitwise.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ogg_bitwise.c; path = "tests/libvorbis-standalone/ogg_bitwise.c"; sourceTree = SOURCE_ROOT; };
 		501898B121F4A4C000F1EF4D /* ogg_framing.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ogg_framing.c; path = "tests/libvorbis-standalone/ogg_framing.c"; sourceTree = SOURCE_ROOT; };
@@ -126,7 +127,6 @@
 		501898F321F5B15D00F1EF4D /* inverse_db_table.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = inverse_db_table.h; sourceTree = "<group>"; };
 		501898F421F5B1C600F1EF4D /* Callbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Callbacks.h; sourceTree = "<group>"; };
 		501898F521F5C52E00F1EF4D /* Callbacks.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Callbacks.cpp; sourceTree = "<group>"; };
-		501898F821F7740500F1EF4D /* mdct.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mdct.c; sourceTree = "<group>"; };
 		501898FA21F7740C00F1EF4D /* mdct.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mdct.h; sourceTree = "<group>"; };
 		501898FB21F9B29000F1EF4D /* ParseOggVorbis.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ParseOggVorbis.hpp; sourceTree = "<group>"; };
 		50C043462209A128006F4B4F /* ParseOggVorbis.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ParseOggVorbis.cpp; sourceTree = "<group>"; };
@@ -191,7 +191,7 @@
 				23309B4221E4FCEF00892406 /* crctable.h */,
 				501898F321F5B15D00F1EF4D /* inverse_db_table.h */,
 				501898FA21F7740C00F1EF4D /* mdct.h */,
-				501898F821F7740500F1EF4D /* mdct.c */,
+				236C5167220E28E900C43525 /* mdct.cpp */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -374,8 +374,8 @@
 				50C043472209A128006F4B4F /* ParseOggVorbis.cpp in Sources */,
 				501898F621F5C52E00F1EF4D /* Callbacks.cpp in Sources */,
 				23309B3B21E3AAA100892406 /* main.cpp in Sources */,
+				236C5168220E28E900C43525 /* mdct.cpp in Sources */,
 				23309B4521E6577F00892406 /* Utils.cpp in Sources */,
-				501898F921F7740500F1EF4D /* mdct.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
