@@ -257,13 +257,20 @@ class CallbacksOutputReader:
             data_repr = repr(list(data))
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
-    def read_floor_ys(self, output_dim, include_floor_number=True):
+    def read_floor_ys(self, output_dim, include_floor_number=None, only_biggest_floor=False, verbose=0):
         """
         :param int output_dim:
         :param bool include_floor_number:
+        :param bool only_biggest_floor:
+        :param int verbose:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
         """
+        if only_biggest_floor:
+            assert include_floor_number in (None, False)
+            include_floor_number = False
+        if include_floor_number is None:
+            include_floor_number = True
         floor_multipliers = []
         floor_xs = []
         while True:
@@ -276,12 +283,21 @@ class CallbacksOutputReader:
             if name == "finish_setup":
                 break
         assert len(floor_multipliers) == len(floor_xs) > 0
-        res_float = numpy.zeros((0, output_dim), dtype="float32")
+        res_float = numpy.zeros((500, output_dim), dtype="float32")
         num_floors = len(floor_xs)
+        biggest_floor_idx = max(range(num_floors), key=lambda i: len(floor_xs[i]))
         dim = output_dim
         if include_floor_number:
             dim -= 1
+        if verbose:
+            if verbose >= 5:
+                for i in range(num_floors):
+                    print("Floor %i/%i, multiplier %i, xs: %r" % (i + 1, num_floors, floor_multipliers[i], floor_xs[i]))
+                print("Biggest floor: %i, len(xs) = %i" % (biggest_floor_idx + 1, len(floor_xs[biggest_floor_idx])))
+            if dim > len(floor_xs[biggest_floor_idx]):
+                print("Warning: Dim = %i > len(biggest floor xs) = %i" % (dim, len(floor_xs[biggest_floor_idx])))
         recent_floor_number = None
+        frame_num = 0
         while True:
             try:
                 name, channel, data = self.read_entry()
@@ -291,6 +307,9 @@ class CallbacksOutputReader:
                 recent_floor_number = data[0]
                 assert 0 <= recent_floor_number < len(floor_xs)
             if name in {"floor1 ys", "floor1 final_ys"}:
+                assert recent_floor_number is not None
+                if only_biggest_floor and recent_floor_number != biggest_floor_idx:
+                    continue
                 assert len(data) == len(floor_xs[recent_floor_number])
                 # values [0..255]
                 data_int = numpy.array(data[:dim], dtype="float32") * floor_multipliers[recent_floor_number]
@@ -302,8 +321,11 @@ class CallbacksOutputReader:
                     frame_float[0] = (recent_floor_number + 1.0) / num_floors - 0.5  # (-0.5,0.5)
                     offset_dim = 1
                 frame_float[offset_dim:offset_dim + frame_float.shape[0]] = data_float
-                res_float = numpy.concatenate([res_float, frame_float[None, :]], axis=0)
-        return res_float
+                if frame_num >= res_float.shape[0]:
+                    res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
+                res_float[frame_num] = frame_float
+                frame_num += 1
+        return res_float[:frame_num]
 
 
 def _do_file(lib, args, fn=None, reader=None, raw_bytes=None):

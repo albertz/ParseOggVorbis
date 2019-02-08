@@ -71,7 +71,7 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
             cls.instance = cls()
         return cls.instance
 
-    def get_floor_ys_encoded(self, raw_bytes, output_dim):
+    def get_features_from_raw_bytes(self, raw_bytes, output_dim, **kwargs):
         """
         :param bytes raw_bytes:
         :param int output_dim:
@@ -83,7 +83,7 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
             "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
             "floor_number", "floor1 final_ys", "finish_audio_packet"]
         reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
-        return reader.read_floor_ys(output_dim=output_dim)
+        return reader.read_floor_ys(output_dim=output_dim, **kwargs)
 
 
 def _demo():
