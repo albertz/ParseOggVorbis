@@ -3,9 +3,11 @@
 import os
 import sys
 
+my_dir = os.path.dirname(os.path.abspath(__file__))
+
 if __name__ == '__main__':
     # https://stackoverflow.com/questions/54576879/
-    __path__ = [os.path.dirname(os.path.abspath(__file__))]
+    __path__ = [my_dir]
 
 import cffi
 from argparse import ArgumentParser
@@ -24,7 +26,7 @@ class ParseOggVorbisLib:
     lib_ext = "so"
     if sys.platform == "darwin":
         lib_ext = "dylib"
-    lib_filename = "./%s.%s" % (lib_name, lib_ext)
+    lib_filename = "%s/%s.%s" % (my_dir, lib_name, lib_ext)
 
     def __init__(self, lib_filename=None):
         """
@@ -327,6 +329,62 @@ class CallbacksOutputReader:
                 frame_num += 1
         return res_float[:frame_num]
 
+    def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None):
+        """
+        :param int output_dim:
+        :param float scale:
+        :param float clip_abs_max:
+        :return: float values in [-1,1], shape (time,dim)
+        :rtype: numpy.ndarray
+        """
+        floor_multipliers = []
+        floor_xs = []
+        while True:
+            name, channel, data = self.read_entry()
+            if name == "floor1_unpack multiplier":
+                assert len(data) == 1
+                floor_multipliers.append(data[0])
+            if name == "floor1_unpack xs":
+                floor_xs.append(numpy.array(data, dtype="int32"))
+            if name == "finish_setup":
+                break
+        assert len(floor_multipliers) == len(floor_xs) > 0
+        res_float = numpy.zeros((500, output_dim), dtype="float32")
+        num_floors = len(floor_xs)
+        biggest_floor_idx = max(range(num_floors), key=lambda i: len(floor_xs[i]))
+        recent_floor_number = None
+        frame_num = 0
+        while True:
+            try:
+                name, channel, data = self.read_entry()
+            except EOFError:
+                break
+            if name == "floor_number":
+                recent_floor_number = data[0]
+                assert 0 <= recent_floor_number < len(floor_xs)
+            if name == "after_residue":
+                assert recent_floor_number is not None
+                if recent_floor_number != biggest_floor_idx:
+                    continue
+                data_float = numpy.array(data, dtype="float32")
+                idxs = floor_xs[recent_floor_number][:output_dim]
+                # We might be just at the edge (e.g. idx==512 and len(data)==512).
+                idxs = numpy.clip(idxs, 0, data_float.shape[0] - 1)
+                selected_data = data_float[idxs]
+                assert len(selected_data) == len(floor_xs[recent_floor_number])
+                assert isinstance(selected_data, numpy.ndarray)
+                if scale != 1:
+                    selected_data *= scale
+                if clip_abs_max is not None and clip_abs_max > 0:
+                    selected_data = numpy.clip(selected_data, -clip_abs_max, clip_abs_max)
+                frame_float = numpy.zeros((output_dim,), dtype="float32")
+                frame_float[0:frame_float.shape[0]] = selected_data
+                if frame_num >= res_float.shape[0]:
+                    res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
+                res_float[frame_num] = frame_float
+                frame_num += 1
+        return res_float[:frame_num]
+
 
 def _do_file(lib, args, fn=None, reader=None, raw_bytes=None):
     """
@@ -363,6 +421,14 @@ def _do_file(lib, args, fn=None, reader=None, raw_bytes=None):
         print("res:")
         print(res)
 
+    elif args.mode == "residue_ys":
+        assert args.output_dim
+        assert "after_residue" in args.filter or not args.filter
+        res = reader.read_residue_ys(output_dim=args.output_dim, scale=args.scale, clip_abs_max=args.clip_abs_max)
+        print("res shape:", res.shape)
+        print("res:")
+        print(res)
+
     else:
         raise Exception("invalid mode %r" % (args.mode,))
 
@@ -376,6 +442,8 @@ def main():
             "floor_number", "floor1 final_ys", "finish_audio_packet"])
     arg_parser.add_argument("--mode", default="dump")
     arg_parser.add_argument("--output_dim", type=int)
+    arg_parser.add_argument("--clip_abs_max", type=float)
+    arg_parser.add_argument("--scale", type=float, default=1.0)
     arg_parser.add_argument("--multi_threaded", action="store_true")
     args = arg_parser.parse_args()
 

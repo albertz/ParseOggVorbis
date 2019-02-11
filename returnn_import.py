@@ -71,19 +71,30 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
             cls.instance = cls()
         return cls.instance
 
-    def get_features_from_raw_bytes(self, raw_bytes, output_dim, **kwargs):
+    def get_features_from_raw_bytes(self, raw_bytes, output_dim, kind="floor_final_ys", **kwargs):
         """
         :param bytes raw_bytes:
         :param int output_dim:
+        :param str kind:
+        :param kwargs: passed to underlying function
         :return: shape (time,output_dim). time does not correspond to the real time, although it correlates.
             It corresponds to the number of audio frames in the Vorbis stream.
         :rtype: numpy.ndarray
         """
-        data_filter = [
-            "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
-            "floor_number", "floor1 final_ys", "finish_audio_packet"]
-        reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
-        return reader.read_floor_ys(output_dim=output_dim, **kwargs)
+        if kind == "floor_final_ys":
+            data_filter = [
+                "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+                "floor_number", "floor1 final_ys", "finish_audio_packet"]
+            reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
+            return reader.read_floor_ys(output_dim=output_dim, **kwargs)
+        elif kind == "residue_ys":
+            data_filter = [
+                "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+                "floor_number", "after_residue", "finish_audio_packet"]
+            reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
+            return reader.read_residue_ys(output_dim=output_dim, **kwargs)
+        else:
+            raise Exception("%s.get_features_from_raw_bytes: invalid kind %r" % (self.__class__.__name__, kind))
 
 
 def _demo():
