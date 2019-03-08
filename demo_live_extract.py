@@ -350,8 +350,8 @@ class CallbacksOutputReader:
                     continue
                 xs = floor_xs_upscaled[recent_floor_number] if floor_xs_upscaled else floor_xs[recent_floor_number]
                 data = numpy.array(data)[numpy.array(xs)]
-                # values [0..255]
-                data_int = numpy.array(data[:dim], dtype="float32") * floor_multipliers[recent_floor_number]
+                # values [0..255] (data is already with multiplier)
+                data_int = numpy.array(data[:dim], dtype="float32")
                 # values [-1.0,1.0]
                 data_float = (data_int.astype("float32") - 127.5) / 127.5
                 frame_float = numpy.zeros((output_dim,), dtype="float32")
