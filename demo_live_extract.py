@@ -259,11 +259,17 @@ class CallbacksOutputReader:
             data_repr = repr(list(data))
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
-    def read_floor_ys(self, output_dim, include_floor_number=None, only_biggest_floor=False, verbose=0):
+    def read_floor_ys(self, output_dim, include_floor_number=None, only_biggest_floor=False,
+                      sorted_xs=False, upscale_xs_factor=1,
+                      verbose=0):
         """
         :param int output_dim:
         :param bool include_floor_number:
         :param bool only_biggest_floor:
+        :param bool sorted_xs: this is useful for plotting (dump-dataset --type plot).
+            Otherwise you probably do not want this, because if your output_dim < len(xs), you might miss
+            important information.
+        :param float|int upscale_xs_factor:
         :param int verbose:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
@@ -275,13 +281,24 @@ class CallbacksOutputReader:
             include_floor_number = True
         floor_multipliers = []
         floor_xs = []
+        floor_xs_upscaled = []
         while True:
             name, channel, data = self.read_entry()
             if name == "floor1_unpack multiplier":
                 assert len(data) == 1
                 floor_multipliers.append(data[0])
             if name == "floor1_unpack xs":
+                if sorted_xs:
+                    data = sorted(data)
                 floor_xs.append(data)
+                if upscale_xs_factor != 1:
+                    import scipy.ndimage
+                    data_upscaled = scipy.ndimage.zoom(
+                        numpy.array(data, dtype="float32"), zoom=upscale_xs_factor,
+                        order=1, mode="nearest")
+                    data_upscaled = numpy.round(data_upscaled).astype("int32")
+                    assert data_upscaled.shape[0] == len(data) * upscale_xs_factor
+                    floor_xs_upscaled.append(data_upscaled)
             if name == "finish_setup":
                 break
         assert len(floor_multipliers) == len(floor_xs) > 0
@@ -308,7 +325,7 @@ class CallbacksOutputReader:
             if name == "floor_number":
                 recent_floor_number = data[0]
                 assert 0 <= recent_floor_number < len(floor_xs)
-            if name in {"floor1 ys", "floor1 final_ys"}:
+            elif name in {"floor1 ys", "floor1 final_ys"}:
                 assert recent_floor_number is not None
                 if only_biggest_floor and recent_floor_number != biggest_floor_idx:
                     continue
@@ -322,7 +339,27 @@ class CallbacksOutputReader:
                 if include_floor_number:
                     frame_float[0] = (recent_floor_number + 1.0) / num_floors - 0.5  # (-0.5,0.5)
                     offset_dim = 1
-                frame_float[offset_dim:offset_dim + frame_float.shape[0]] = data_float
+                frame_float[offset_dim:offset_dim + data_float.shape[0]] = data_float
+                if frame_num >= res_float.shape[0]:
+                    res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
+                res_float[frame_num] = frame_float
+                frame_num += 1
+            elif name == "floor1 floor":
+                assert recent_floor_number is not None
+                if only_biggest_floor and recent_floor_number != biggest_floor_idx:
+                    continue
+                xs = floor_xs_upscaled[recent_floor_number] if floor_xs_upscaled else floor_xs[recent_floor_number]
+                data = numpy.array(data)[numpy.array(xs)]
+                # values [0..255]
+                data_int = numpy.array(data[:dim], dtype="float32") * floor_multipliers[recent_floor_number]
+                # values [-1.0,1.0]
+                data_float = (data_int.astype("float32") - 127.5) / 127.5
+                frame_float = numpy.zeros((output_dim,), dtype="float32")
+                offset_dim = 0
+                if include_floor_number:
+                    frame_float[0] = (recent_floor_number + 1.0) / num_floors - 0.5  # (-0.5,0.5)
+                    offset_dim = 1
+                frame_float[offset_dim:offset_dim + data_float.shape[0]] = data_float
                 if frame_num >= res_float.shape[0]:
                     res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
                 res_float[frame_num] = frame_float
