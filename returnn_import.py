@@ -99,6 +99,12 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
                 "floor_number", "after_residue", "finish_audio_packet"]
             reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
             return reader.read_residue_ys(output_dim=output_dim, **kwargs)
+        elif kind == "residue_ys_with_floor":
+            data_filter = [
+                "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+                "floor_number", "floor1 floor", "after_residue", "finish_audio_packet"]
+            reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
+            return reader.read_residue_ys(output_dim=output_dim, **kwargs)
         else:
             raise Exception("%s.get_features_from_raw_bytes: invalid kind %r" % (self.__class__.__name__, kind))
 

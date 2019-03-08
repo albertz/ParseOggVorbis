@@ -366,11 +366,17 @@ class CallbacksOutputReader:
                 frame_num += 1
         return res_float[:frame_num]
 
-    def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None):
+    def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None, log1p_abs_space=False, sorted_xs=False,
+                        floor_base_factor=1):
         """
         :param int output_dim:
         :param float scale:
         :param float clip_abs_max:
+        :param bool log1p_abs_space:
+        :param float floor_base_factor:
+        :param bool sorted_xs: this is useful for plotting (dump-dataset --type plot).
+            Otherwise you probably do not want this, because if your output_dim < len(xs), you might miss
+            important information.
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
         """
@@ -382,6 +388,8 @@ class CallbacksOutputReader:
                 assert len(data) == 1
                 floor_multipliers.append(data[0])
             if name == "floor1_unpack xs":
+                if sorted_xs:
+                    data = sorted(data)
                 floor_xs.append(numpy.array(data, dtype="int32"))
             if name == "finish_setup":
                 break
@@ -391,6 +399,7 @@ class CallbacksOutputReader:
         biggest_floor_idx = max(range(num_floors), key=lambda i: len(floor_xs[i]))
         recent_floor_number = None
         frame_num = 0
+        floor_base = None
         while True:
             try:
                 name, channel, data = self.read_entry()
@@ -399,23 +408,42 @@ class CallbacksOutputReader:
             if name == "floor_number":
                 recent_floor_number = data[0]
                 assert 0 <= recent_floor_number < len(floor_xs)
+            idxs = None
+            if recent_floor_number is not None:
+                idxs = floor_xs[recent_floor_number][:output_dim]
+                # We might be just at the edge (e.g. idx==512 and len(data)==512).
+                idxs = numpy.clip(idxs, 0, len(data) - 1)
+            if name == "floor1 floor":
+                assert recent_floor_number is not None
+                if recent_floor_number != biggest_floor_idx:
+                    continue
+                data = numpy.array(data)[idxs]
+                # values [0..255] (data is already with multiplier)
+                data_int = numpy.array(data, dtype="float32")
+                # values [0.0,1.0]
+                data_float = (data_int.astype("float32")) / 255.0
+                floor_base = data_float
             if name == "after_residue":
                 assert recent_floor_number is not None
                 if recent_floor_number != biggest_floor_idx:
                     continue
                 data_float = numpy.array(data, dtype="float32")
-                idxs = floor_xs[recent_floor_number][:output_dim]
-                # We might be just at the edge (e.g. idx==512 and len(data)==512).
-                idxs = numpy.clip(idxs, 0, data_float.shape[0] - 1)
                 selected_data = data_float[idxs]
                 assert len(selected_data) == len(floor_xs[recent_floor_number])
                 assert isinstance(selected_data, numpy.ndarray)
+                if log1p_abs_space:
+                    selected_data = numpy.log1p(numpy.abs(selected_data))
+                if floor_base is not None:
+                    if log1p_abs_space:
+                        selected_data += floor_base * floor_base_factor
+                    else:
+                        selected_data *= numpy.exp((floor_base - 1.0) * floor_base_factor)
                 if scale != 1:
                     selected_data *= scale
                 if clip_abs_max is not None and clip_abs_max > 0:
                     selected_data = numpy.clip(selected_data, -clip_abs_max, clip_abs_max)
                 frame_float = numpy.zeros((output_dim,), dtype="float32")
-                frame_float[0:frame_float.shape[0]] = selected_data
+                frame_float[0:selected_data.shape[0]] = selected_data
                 if frame_num >= res_float.shape[0]:
                     res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
                 res_float[frame_num] = frame_float
