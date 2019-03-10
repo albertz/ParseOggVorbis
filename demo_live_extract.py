@@ -261,6 +261,7 @@ class CallbacksOutputReader:
 
     def read_floor_ys(self, output_dim, include_floor_number=None, only_biggest_floor=False,
                       sorted_xs=False, upscale_xs_factor=1, xs_from_biggest_floor=False,
+                      floor_always_positive=False,
                       verbose=0):
         """
         :param int output_dim:
@@ -273,6 +274,7 @@ class CallbacksOutputReader:
         :param float|int upscale_xs_factor:
         :param bool xs_from_biggest_floor: False is old behavior, but probably you want to use this
           (only relevant if not only_biggest_floor)
+        :param bool floor_always_positive:
         :param int verbose:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
@@ -355,8 +357,12 @@ class CallbacksOutputReader:
                 assert len(data) == len(floor_xs[recent_floor_number])
                 # values [0..255]
                 data_int = numpy.array(data[:dim], dtype="float32") * floor_multipliers[recent_floor_number]
-                # values [-1.0,1.0]
-                data_float = (data_int.astype("float32") - 127.5) / 127.5
+                if floor_always_positive:
+                    # values [0,1.0]
+                    data_float = data_int.astype("float32") / 255.0
+                else:
+                    # values [-1.0,1.0]
+                    data_float = (data_int.astype("float32") - 127.5) / 127.5
                 frame_float = numpy.zeros((output_dim,), dtype="float32")
                 offset_dim = 0
                 if include_floor_number:
@@ -372,8 +378,12 @@ class CallbacksOutputReader:
                 data = numpy.array(data)[xs]
                 # values [0..255] (data is already with multiplier)
                 data_int = numpy.array(data[:dim], dtype="float32")
-                # values [-1.0,1.0]
-                data_float = (data_int.astype("float32") - 127.5) / 127.5
+                if floor_always_positive:
+                    # values [0,1.0]
+                    data_float = data_int.astype("float32") / 255.0
+                else:
+                    # values [-1.0,1.0]
+                    data_float = (data_int.astype("float32") - 127.5) / 127.5
                 frame_float = numpy.zeros((output_dim,), dtype="float32")
                 offset_dim = 0
                 if include_floor_number:
