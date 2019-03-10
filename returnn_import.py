@@ -109,13 +109,14 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
             raise Exception("%s.get_features_from_raw_bytes: invalid kind %r" % (self.__class__.__name__, kind))
 
 
-def _plot(m):
+def _plot(m, end_frame=None):
   """
   :param numpy.ndarray m:
+  :param int|None end_frame:
   """
   print("Plotting matrix of shape %s." % (m.shape,))
   from matplotlib.pyplot import matshow, show
-  matshow(m.transpose(), aspect="auto")
+  matshow(m.transpose()[:, :end_frame], aspect="auto")
   show()
 
 
@@ -128,6 +129,7 @@ def _demo():
     arg_parser.add_argument("--opts")
     arg_parser.add_argument("--kind")
     arg_parser.add_argument("--dim", type=int)
+    arg_parser.add_argument("--end_frame", type=int, default=None, help="e.g. 200, better for plotting")
     args = arg_parser.parse_args()
     lib_fn = get_auto_compiled_lib_filename(verbose=True)
     print("Lib filename:", lib_fn)
@@ -140,7 +142,7 @@ def _demo():
             opts = {}
         features = lib.get_features_from_raw_bytes(
             raw_bytes=raw_bytes, kind=args.kind, output_dim=args.dim, **opts)
-        _plot(features)
+        _plot(features, end_frame=args.end_frame)
 
 
 if __name__ == '__main__':
