@@ -397,7 +397,9 @@ class CallbacksOutputReader:
                 frame_num += 1
             elif name == "after_residue":
                 assert recent_floor_number is not None
-                assert frame_num > 0 and offset_dim > 0  # had floor before
+                if offset_dim == 0:  # no floor before, can happen for some
+                    continue
+                assert frame_num > 0  # had floor before
                 assert output_dim >= offset_dim
                 # Could use xs, but instead, this seems more interesting.
                 idxs = numpy.arange(start=0, stop=len(data), step=1)
@@ -410,6 +412,7 @@ class CallbacksOutputReader:
                 data = scipy.ndimage.zoom(data, zoom=0.5)
                 data = data[:output_dim - offset_dim]
                 res_float[frame_num - 1, offset_dim:offset_dim + data.shape[0]] = data
+                offset_dim = 0
         return res_float[:frame_num]
 
     def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None, log1p_abs_space=False, sorted_xs=False,
