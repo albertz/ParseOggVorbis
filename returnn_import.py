@@ -87,10 +87,16 @@ class ParseOggVorbisLib(_ParseOggVorbisLib):
                 "floor_number", "floor1 final_ys", "finish_audio_packet"]
             reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
             return reader.read_floor_ys(output_dim=output_dim, **kwargs)
-        if kind == "floor_final_ys_rendered":
+        elif kind == "floor_final_ys_rendered":
             data_filter = [
                 "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
                 "floor_number", "floor1 floor", "finish_audio_packet"]
+            reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
+            return reader.read_floor_ys(output_dim=output_dim, **kwargs)
+        elif kind == "floor_final_ys_rendered_concat_residue":
+            data_filter = [
+                "floor1_unpack multiplier", "floor1_unpack xs", "finish_setup",
+                "floor_number", "floor1 floor", "after_residue", "finish_audio_packet"]
             reader = self.decode_ogg_vorbis(raw_bytes=raw_bytes, data_filter=data_filter)
             return reader.read_floor_ys(output_dim=output_dim, **kwargs)
         elif kind == "residue_ys":

@@ -269,6 +269,7 @@ class CallbacksOutputReader:
         :param bool sorted_xs: this is useful for plotting (dump-dataset --type plot).
             Otherwise you probably do not want this, because if your output_dim < len(xs), you might miss
             important information.
+            Except with upscale_xs_factor, where this again probably makes sense.
         :param float|int upscale_xs_factor:
         :param bool xs_from_biggest_floor: False is old behavior, but probably you want to use this
           (only relevant if not only_biggest_floor)
@@ -319,15 +320,35 @@ class CallbacksOutputReader:
                 print("Warning: Dim = %i > len(biggest floor xs) = %i" % (dim, len(floor_xs[biggest_floor_idx])))
         recent_floor_number = None
         frame_num = 0
+        offset_dim = 0
         while True:
             try:
                 name, channel, data = self.read_entry()
             except EOFError:
                 break
+
             if name == "floor_number":
                 recent_floor_number = data[0]
                 assert 0 <= recent_floor_number < len(floor_xs)
-            elif name in {"floor1 ys", "floor1 final_ys"}:
+
+            xs = None
+            factor = None
+            if recent_floor_number is not None:
+                if only_biggest_floor and recent_floor_number != biggest_floor_idx:
+                    continue
+                xs = floor_xs_upscaled if floor_xs_upscaled else floor_xs
+                if xs_from_biggest_floor:
+                    xs = xs[biggest_floor_idx]
+                    if biggest_floor_idx != recent_floor_number:
+                        max_big_x = max(floor_xs[biggest_floor_idx])
+                        max_cur_x = max(floor_xs[recent_floor_number])
+                        factor = int(round(float(max_big_x) / float(max_cur_x)))
+                        xs = xs // factor
+                    xs = numpy.clip(xs, 0, len(data) - 1)
+                else:
+                    xs = xs[recent_floor_number]
+
+            if name in {"floor1 ys", "floor1 final_ys"}:
                 assert recent_floor_number is not None
                 if only_biggest_floor and recent_floor_number != biggest_floor_idx:
                     continue
@@ -348,19 +369,6 @@ class CallbacksOutputReader:
                 frame_num += 1
             elif name == "floor1 floor":
                 assert recent_floor_number is not None
-                if only_biggest_floor and recent_floor_number != biggest_floor_idx:
-                    continue
-                xs = floor_xs_upscaled if floor_xs_upscaled else floor_xs
-                if xs_from_biggest_floor:
-                    xs = xs[biggest_floor_idx]
-                    if biggest_floor_idx != recent_floor_number:
-                        max_big_x = max(floor_xs[biggest_floor_idx])
-                        max_cur_x = max(floor_xs[recent_floor_number])
-                        factor = int(round(float(max_big_x) / float(max_cur_x)))
-                        xs = xs // factor
-                    xs = numpy.clip(xs, 0, len(data) - 1)
-                else:
-                    xs = xs[recent_floor_number]
                 data = numpy.array(data)[xs]
                 # values [0..255] (data is already with multiplier)
                 data_int = numpy.array(data[:dim], dtype="float32")
@@ -372,10 +380,26 @@ class CallbacksOutputReader:
                     frame_float[0] = (recent_floor_number + 1.0) / num_floors - 0.5  # (-0.5,0.5)
                     offset_dim = 1
                 frame_float[offset_dim:offset_dim + data_float.shape[0]] = data_float
+                offset_dim += data_float.shape[0]
                 if frame_num >= res_float.shape[0]:
                     res_float = numpy.concatenate([res_float, numpy.zeros_like(res_float)], axis=0)
                 res_float[frame_num] = frame_float
                 frame_num += 1
+            elif name == "after_residue":
+                assert recent_floor_number is not None
+                assert frame_num > 0 and offset_dim > 0  # had floor before
+                assert output_dim >= offset_dim
+                # Could use xs, but instead, this seems more interesting.
+                idxs = numpy.arange(start=0, stop=len(data), step=1)
+                if factor:
+                    idxs = idxs // factor
+                # Some hardcoded hyper params here...
+                data = numpy.array(data)[idxs]
+                data = numpy.log1p(numpy.abs(data)) * 0.1
+                import scipy.ndimage
+                data = scipy.ndimage.zoom(data, zoom=0.5)
+                data = data[:output_dim - offset_dim]
+                res_float[frame_num - 1, offset_dim:offset_dim + data.shape[0]] = data
         return res_float[:frame_num]
 
     def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None, log1p_abs_space=False, sorted_xs=False,
