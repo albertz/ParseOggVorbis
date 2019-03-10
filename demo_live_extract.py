@@ -413,7 +413,7 @@ class CallbacksOutputReader:
         return res_float[:frame_num]
 
     def read_residue_ys(self, output_dim, scale=1.0, clip_abs_max=None, log1p_abs_space=False, sorted_xs=False,
-                        floor_base_factor=1):
+                        ignore_xs=False, floor_base_factor=1):
         """
         :param int output_dim:
         :param float scale:
@@ -423,6 +423,7 @@ class CallbacksOutputReader:
         :param bool sorted_xs: this is useful for plotting (dump-dataset --type plot).
             Otherwise you probably do not want this, because if your output_dim < len(xs), you might miss
             important information.
+        :param bool ignore_xs:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
         """
@@ -456,9 +457,12 @@ class CallbacksOutputReader:
                 assert 0 <= recent_floor_number < len(floor_xs)
             idxs = None
             if recent_floor_number is not None:
-                idxs = floor_xs[recent_floor_number][:output_dim]
-                # We might be just at the edge (e.g. idx==512 and len(data)==512).
-                idxs = numpy.clip(idxs, 0, len(data) - 1)
+                if ignore_xs:
+                    idxs = numpy.arange(start=0, stop=len(data), step=1)[:output_dim]
+                else:
+                    idxs = floor_xs[recent_floor_number][:output_dim]
+                    # We might be just at the edge (e.g. idx==512 and len(data)==512).
+                    idxs = numpy.clip(idxs, 0, len(data) - 1)
             if name == "floor1 floor":
                 assert recent_floor_number is not None
                 if recent_floor_number != biggest_floor_idx:
@@ -475,7 +479,8 @@ class CallbacksOutputReader:
                     continue
                 data_float = numpy.array(data, dtype="float32")
                 selected_data = data_float[idxs]
-                assert len(selected_data) == len(floor_xs[recent_floor_number])
+                if not ignore_xs:
+                    assert len(selected_data) == len(floor_xs[recent_floor_number])
                 assert isinstance(selected_data, numpy.ndarray)
                 if log1p_abs_space:
                     selected_data = numpy.log1p(numpy.abs(selected_data))
