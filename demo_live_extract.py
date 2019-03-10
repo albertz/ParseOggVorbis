@@ -260,7 +260,7 @@ class CallbacksOutputReader:
         print("Decoder %r name=%r channel=%r data=%s len=%i" % (self.decoder_name, name, channel, data_repr, len(data)))
 
     def read_floor_ys(self, output_dim, include_floor_number=None, only_biggest_floor=False,
-                      sorted_xs=False, upscale_xs_factor=1,
+                      sorted_xs=False, upscale_xs_factor=1, xs_from_biggest_floor=False,
                       verbose=0):
         """
         :param int output_dim:
@@ -270,6 +270,8 @@ class CallbacksOutputReader:
             Otherwise you probably do not want this, because if your output_dim < len(xs), you might miss
             important information.
         :param float|int upscale_xs_factor:
+        :param bool xs_from_biggest_floor: False is old behavior, but probably you want to use this
+          (only relevant if not only_biggest_floor)
         :param int verbose:
         :return: float values in [-1,1], shape (time,dim)
         :rtype: numpy.ndarray
@@ -290,7 +292,7 @@ class CallbacksOutputReader:
             if name == "floor1_unpack xs":
                 if sorted_xs:
                     data = sorted(data)
-                floor_xs.append(data)
+                floor_xs.append(numpy.array(data))
                 if upscale_xs_factor != 1:
                     import scipy.ndimage
                     data_upscaled = scipy.ndimage.zoom(
@@ -348,8 +350,18 @@ class CallbacksOutputReader:
                 assert recent_floor_number is not None
                 if only_biggest_floor and recent_floor_number != biggest_floor_idx:
                     continue
-                xs = floor_xs_upscaled[recent_floor_number] if floor_xs_upscaled else floor_xs[recent_floor_number]
-                data = numpy.array(data)[numpy.array(xs)]
+                xs = floor_xs_upscaled if floor_xs_upscaled else floor_xs
+                if xs_from_biggest_floor:
+                    xs = xs[biggest_floor_idx]
+                    if biggest_floor_idx != recent_floor_number:
+                        max_big_x = max(floor_xs[biggest_floor_idx])
+                        max_cur_x = max(floor_xs[recent_floor_number])
+                        factor = int(round(float(max_big_x) / float(max_cur_x)))
+                        xs = xs // factor
+                    xs = numpy.clip(xs, 0, len(data) - 1)
+                else:
+                    xs = xs[recent_floor_number]
+                data = numpy.array(data)[xs]
                 # values [0..255] (data is already with multiplier)
                 data_int = numpy.array(data[:dim], dtype="float32")
                 # values [-1.0,1.0]
